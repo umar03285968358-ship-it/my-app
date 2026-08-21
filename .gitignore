@@ -1,15 +1,27 @@
 # Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
 
-# dependencies
+# ==============================
+# Dependencies
+# ==============================
 node_modules/
 
+# ==============================
 # Expo
+# ==============================
 .expo/
 dist/
 web-build/
 expo-env.d.ts
 
-# Native
+# Expo configuration
+app.json
+app.config.js
+app.config.ts
+eas.json
+
+# ==============================
+# Native / Generated
+# ==============================
 .kotlin/
 *.orig.*
 *.jks
@@ -18,26 +30,62 @@ expo-env.d.ts
 *.key
 *.mobileprovision
 
+# Generated native folders
+/ios
+/android
+
+# ==============================
 # Metro
+# ==============================
 .metro-health-check*
 
-# debug
+# ==============================
+# Debug / Logs
+# ==============================
 npm-debug.*
 yarn-debug.*
 yarn-error.*
+*.log
 
+# ==============================
 # macOS
+# ==============================
 .DS_Store
 *.pem
 
-# local env files
+# ==============================
+# Environment / Secrets
+# ==============================
+.env
+.env.*
 .env*.local
 
-# typescript
+# ==============================
+# TypeScript
+# ==============================
 *.tsbuildinfo
 
+# ==============================
+# Temporary / Example
+# ==============================
 app-example
 
-# generated native folders
-/ios
-/android
+# ==============================
+# IDE / Editor
+# ==============================
+.vscode/
+.idea/
+
+# ==============================
+# OS / Temporary files
+# ==============================
+Thumbs.db
+Desktop.ini
+*.tmp
+*.temp
+
+# ==============================
+# Build / Cache
+# ==============================
+.cache/
+coverage/
