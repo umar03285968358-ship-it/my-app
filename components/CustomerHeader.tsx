@@ -30,7 +30,7 @@ export default function CustomerHeader() {
     loading: categoriesLoading,
   } = useMobCategories();
 
-  const [userName, setUserName] = useState("User");
+  const [userName, setUserName] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -46,12 +46,15 @@ export default function CustomerHeader() {
           user?.fullName ||
           user?.userName ||
           user?.firstName ||
-          user?.username ||
-          "User";
+          user?.username;
 
-        setUserName(String(name).trim() || "User");
+        setUserName(name ? String(name).trim() : null);
       } catch (error) {
         console.log("[CUSTOMER HEADER] Failed to load user:", error);
+
+        if (mounted) {
+          setUserName(null);
+        }
       }
     };
 
@@ -61,7 +64,6 @@ export default function CustomerHeader() {
       mounted = false;
     };
   }, []);
-
   const isHome =
     pathname === "/" ||
     pathname === "/(tabs)" ||
@@ -127,7 +129,7 @@ export default function CustomerHeader() {
   }, [subcategoryId, categories]);
 
   const getPageTitle = () => {
-    if (isHome) return `Hi, ${userName}`;
+    if (isHome) return userName ? `Hi, ${userName}` : "";
     if (isCategories) return "Categories";
     if (isCart) return "Cart";
     if (isOrders) return "Orders";
@@ -416,6 +418,8 @@ const styles = StyleSheet.create({
 
   title: {
     flex: 1,
+    minWidth: 0,
+    flexShrink: 1,
     fontSize: 20,
     fontWeight: "800",
     color: colors.white,
@@ -425,6 +429,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
+    flexShrink: 0,
   },
 
   backButton: {
@@ -446,6 +451,8 @@ const styles = StyleSheet.create({
     bottom: 0,
     alignItems: "center",
     justifyContent: "center",
+    minWidth: 0,
+    overflow: "hidden",
   },
 
   /*
@@ -460,6 +467,8 @@ const styles = StyleSheet.create({
 
   detailTitle: {
     maxWidth: "100%",
+    minWidth: 0,
+    flexShrink: 1,
     fontSize: 18,
     fontWeight: "800",
     color: colors.white,
@@ -471,6 +480,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 10,
     marginLeft: "auto",
+    flexShrink: 0,
   },
 
   searchIconButton: {

@@ -6,13 +6,14 @@ import {
 import {
   router,
   Stack,
+  usePathname,
   useRootNavigationState,
   useSegments,
 } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useRef, useState } from "react";
-import { View } from "react-native";
+import { BackHandler, ToastAndroid, View } from "react-native";
 import "react-native-reanimated";
 import {
   SafeAreaProvider,
@@ -128,23 +129,174 @@ export default function RootLayout() {
  * But it must NOT appear on auth screens (login,
  * signup, otp, etc.) or on the rider app, since
  * CustomerHeader is customer-only chrome (cart icon,
- * customer page titles, customer search). We use
- * useSegments() rather than usePathname() here because
- * segments preserve the route GROUP name ("(auth)"),
- * while usePathname() strips group parentheses and
- * would make "(auth)" indistinguishable from "(tabs)".
+ * customer page titles, customer search).
  */
 function RootContent() {
   const insets = useSafeAreaInsets();
   const segments = useSegments();
+  const pathname = usePathname();
 
   const headerHeight = CUSTOMER_HEADER_HEIGHT + insets.top;
 
   const rootSegment = segments[0];
+
   const isAuthGroup = rootSegment === "(auth)";
   const isRiderGroup = rootSegment === "(rider)";
 
   const showCustomerHeader = !isAuthGroup && !isRiderGroup;
+
+  /*
+   * ---------------------------------------------------------
+   * ANDROID BACK BUTTON
+   *
+   * On the customer home screen:
+   *
+   * First press:
+   *   "Press back again to exit"
+   *
+   * Second press within 2 seconds:
+   *   Exit the application.
+   *
+   * This prevents Android from navigating back to the
+   * previous root/auth route and displaying the splash screen.
+   *
+   * Other screens keep their normal Expo Router behavior.
+   * ---------------------------------------------------------
+   */
+
+  const lastBackPress = useRef(0);
+
+  const isHome =
+    pathname === "/" ||
+    pathname === "/(tabs)" ||
+    pathname === "/(tabs)/" ||
+    pathname === "/(tabs)/index";
+
+  useEffect(() => {
+    const handleBackPress = () => {
+      /*
+       * Only handle Android back specially on Home.
+       *
+       * For Category, Product, Cart, Orders, etc.,
+       * return false so Expo Router handles navigation normally.
+       */
+      if (!isHome) {
+        return false;
+      }
+
+      const currentTime = Date.now();
+
+      /*
+       * Second press within 2 seconds = exit app.
+       */
+      if (currentTime - lastBackPress.current < 2000) {
+        BackHandler.exitApp();
+
+        return true;
+      }
+
+      /*
+       * First press.
+       */
+      lastBackPress.current = currentTime;
+
+      ToastAndroid.show("Press back again to exit", ToastAndroid.SHORT);
+
+      return true;
+    };
+
+    const subscription = BackHandler.addEventListener(
+      "hardwareBackPress",
+      handleBackPress,
+    );
+
+    return () => {
+      subscription.remove();
+    };
+  }, [isHome]);
+
+  /*
+   * ---------------------------------------------------------
+   * AUTH SCREEN PROTECTION
+   *
+   * Whenever the user reaches an auth screen, check
+   * AsyncStorage again.
+   *
+   * If a token already exists, do NOT allow the user to
+   * remain on Login / Signup / OTP etc.
+   *
+   * Instead send them to their correct landing route.
+   *
+   * If there is no token, do nothing and allow the auth
+   * screen to continue normally.
+   * ---------------------------------------------------------
+   */
+
+  const authRedirecting = useRef(false);
+
+  useEffect(() => {
+    if (!isAuthGroup) {
+      authRedirecting.current = false;
+      return;
+    }
+
+    let mounted = true;
+
+    const checkExistingSession = async () => {
+      try {
+        /*
+         * Avoid running another redirect while the current
+         * auth redirect is already in progress.
+         */
+        if (authRedirecting.current) {
+          return;
+        }
+
+        const token = await getToken();
+
+        if (!mounted) return;
+
+        /*
+         * No token:
+         *
+         * User is genuinely logged out.
+         * Allow Login / Signup / OTP to stay visible.
+         */
+        if (!token) {
+          return;
+        }
+
+        /*
+         * Token exists:
+         *
+         * User is already logged in.
+         * Do not allow them to stay inside auth screens.
+         */
+        const user = await getUser();
+
+        if (!mounted) return;
+
+        const userType = String(user?.userType ?? "")
+          .trim()
+          .toLowerCase();
+
+        const destination: LandingRoute =
+          userType === "rider" ? "/(rider)/dashboard" : "/(tabs)";
+
+        authRedirecting.current = true;
+
+        router.replace(destination as Parameters<typeof router.replace>[0]);
+      } catch (error) {
+        console.log("[ROOT CONTENT] Auth screen session check failed:", error);
+      }
+    };
+
+    checkExistingSession();
+
+    return () => {
+      mounted = false;
+    };
+  }, [isAuthGroup]);
 
   return (
     <View style={{ flex: 1 }}>
@@ -280,14 +432,6 @@ function RootContent() {
         />
       </Stack>
 
-      {/*
-       * Global customer header.
-       *
-       * Only mounted for customer-facing routes.
-       * Hidden entirely on (auth) and (rider) groups
-       * so login/signup/otp/rider screens render with
-       * no customer chrome at all.
-       */}
       {showCustomerHeader && <CustomerHeader />}
     </View>
   );

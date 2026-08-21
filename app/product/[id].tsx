@@ -1,10 +1,9 @@
 import { colors, radius, spacing, typography } from "@/constants/theme";
 import { useCart } from "@/context/CartContext";
-import { useWishlist } from "@/context/WishlistContext";
 import { useMobProducts } from "@/hooks/useMobProducts";
 import { formatRs } from "@/utils/currency";
 import { Ionicons } from "@expo/vector-icons";
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -17,11 +16,9 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-const ORANGE = "#F1731F";
-const ORANGE_LIGHT = "#FF914D";
-const SOFT_ORANGE = "#FFF1E8";
-
 export default function ProductDetailScreen() {
+  const router = useRouter();
+
   const { id, catId, subCatId } = useLocalSearchParams<{
     id: string;
     catId: string;
@@ -39,80 +36,129 @@ export default function ProductDetailScreen() {
 
   const { addToCart, updateQty, getItemQuantity } = useCart();
 
-  const { isWishlisted, toggleWishlist } = useWishlist();
-
   /*
-   * MobProduct currently doesn't expose
-   * stock quantity, so keep unlimited quantity
-   * until the backend field is available.
+   * Currently there is no stock quantity
+   * exposed by MobProduct.
    */
   const stock = Infinity;
 
+  /*
+   * Quantity currently inside cart.
+   */
   const inCart = product ? getItemQuantity(product.productID) : 0;
 
+  /*
+   * Local quantity selector.
+   */
   const [qty, setQty] = useState(1);
 
+  /*
+   * Sync quantity with cart when product changes.
+   */
   useEffect(() => {
-    if (product) {
-      setQty(inCart > 0 ? inCart : 1);
-    }
+    if (!product) return;
+
+    setQty(inCart > 0 ? inCart : 1);
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [product?.productID]);
 
-  const canDecrease = qty > 1;
+  /*
+   * Quantity controls.
+   */
+  const canDecrease = qty > 0;
   const canIncrease = qty < stock;
 
-  const decrease = () => {
-    setQty((current) => Math.max(1, current - 1));
-  };
+  /*
+   * Is the product currently added?
+   */
+  const isAddedToCart = inCart > 0 && qty > 0;
 
-  const increase = () => {
-    setQty((current) => Math.min(stock, current + 1));
-  };
-
-  const handleAddToCart = () => {
-    if (!product) return;
-
-    /*
-     * If the product already exists in the cart,
-     * update its quantity instead of adding on top.
-     */
-    if (inCart > 0) {
-      updateQty(product.productID, qty);
-    } else {
-      addToCart(product, qty);
-    }
-  };
-
-  const liked = product ? isWishlisted(product.productID) : false;
-
-  const outOfStock = stock <= 0;
-
+  /*
+   * Total price.
+   */
   const totalPrice = useMemo(() => {
-    if (!product) return 0;
+    if (!product || qty <= 0) {
+      return 0;
+    }
 
     return product.salePrice * qty;
   }, [product, qty]);
 
-  const savingAmount = useMemo(() => {
-    if (!product || product.discPercentage <= 0) {
-      return 0;
+  /*
+   * Decrease quantity.
+   */
+  const decrease = () => {
+    if (!product) return;
+
+    const nextQty = Math.max(0, qty - 1);
+
+    setQty(nextQty);
+
+    if (inCart > 0) {
+      updateQty(product.productID, nextQty);
+    }
+  };
+
+  /*
+   * Increase quantity.
+   */
+  const increase = () => {
+    if (!product) return;
+
+    const nextQty = Math.min(stock, qty + 1);
+
+    setQty(nextQty);
+
+    if (inCart > 0) {
+      updateQty(product.productID, nextQty);
+    }
+  };
+
+  /*
+   * Add product to cart.
+   */
+  const handleAddToCart = () => {
+    if (!product) return;
+
+    if (qty <= 0) {
+      return;
     }
 
-    return product.avgCostPrice - product.salePrice;
-  }, [product]);
+    if (inCart > 0) {
+      updateQty(product.productID, qty);
+      return;
+    }
 
-  /* =========================================
-     LOADING STATE
-  ========================================= */
+    addToCart(product, qty);
+  };
 
+  /*
+   * Checkout is available only when
+   * product has actually been added.
+   */
+  const canCheckout = inCart > 0 && qty > 0;
+
+  const handleCheckout = () => {
+    if (!canCheckout) {
+      return;
+    }
+
+    router.push("/cart");
+  };
+
+  /*
+   * Loading state.
+   */
   if (loading) {
     return (
-      <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
+      <SafeAreaView
+        style={styles.container}
+        edges={["left", "right", "bottom"]}
+      >
         <View style={styles.centerState}>
           <View style={styles.stateIcon}>
-            <ActivityIndicator color={ORANGE} size="small" />
+            <ActivityIndicator color={colors.primaryDark} size="small" />
           </View>
 
           <Text style={styles.stateTitle}>Loading product</Text>
@@ -125,19 +171,21 @@ export default function ProductDetailScreen() {
     );
   }
 
-  /* =========================================
-     ERROR / NOT FOUND STATE
-  ========================================= */
-
+  /*
+   * Error / not found.
+   */
   if (error || !product) {
     return (
-      <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
+      <SafeAreaView
+        style={styles.container}
+        edges={["left", "right", "bottom"]}
+      >
         <View style={styles.centerState}>
           <View style={styles.stateIcon}>
             <Ionicons
               name={error ? "cloud-offline-outline" : "cube-outline"}
               size={30}
-              color={ORANGE}
+              color={colors.primaryDark}
             />
           </View>
 
@@ -154,7 +202,7 @@ export default function ProductDetailScreen() {
             activeOpacity={0.85}
             onPress={() => refetch()}
           >
-            <Ionicons name="refresh-outline" size={17} color="#FFFFFF" />
+            <Ionicons name="refresh-outline" size={17} color={colors.white} />
 
             <Text style={styles.retryText}>Try again</Text>
           </TouchableOpacity>
@@ -164,320 +212,250 @@ export default function ProductDetailScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
-      {/* =========================================
-          MAIN CONTENT
-
-          CustomerHeader is now responsible for:
-          - Back button
-          - Centered "Product Details" title
-          - Cart button
-
-          Therefore there is NO local top bar here.
-      ========================================= */}
+    <SafeAreaView style={styles.container} edges={["left", "right", "bottom"]}>
+      {/* SCROLLABLE CONTENT */}
 
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
+        bounces={true}
       >
-        {/* =====================================
-            PRODUCT IMAGE AREA
-        ===================================== */}
+        {/* PRODUCT IMAGE */}
 
         <View style={styles.visualWrapper}>
           <View style={styles.imageCard}>
-            <View style={styles.imageInner}>
-              {product.imagesPath ? (
-                <Image
-                  source={{
-                    uri: product.imagesPath,
-                  }}
-                  style={styles.image}
-                />
-              ) : (
-                <View style={styles.imageFallback}>
-                  <View style={styles.fallbackIcon}>
-                    <Ionicons name="image-outline" size={36} color={ORANGE} />
-                  </View>
-
-                  <Text style={styles.fallbackText}>No image available</Text>
-                </View>
-              )}
-            </View>
-          </View>
-
-          {/* =================================
-              DISCOUNT BADGE
-          ================================= */}
-
-          {product.discPercentage > 0 && (
-            <View style={styles.discountBadge}>
-              <Ionicons name="pricetag" size={13} color="#FFFFFF" />
-
-              <Text style={styles.discountBadgeText}>
-                {product.discPercentage}% OFF
-              </Text>
-            </View>
-          )}
-
-          {/* =================================
-              WISHLIST
-          ================================= */}
-
-          <TouchableOpacity
-            style={[
-              styles.wishlistButton,
-              liked && styles.wishlistButtonActive,
-            ]}
-            activeOpacity={0.8}
-            onPress={() => toggleWishlist(product)}
-            hitSlop={6}
-          >
-            <Ionicons
-              name={liked ? "heart" : "heart-outline"}
-              size={21}
-              color={liked ? ORANGE : colors.textPrimary}
-            />
-          </TouchableOpacity>
-        </View>
-
-        {/* =====================================
-            PRODUCT INFORMATION
-        ===================================== */}
-
-        <View style={styles.infoContainer}>
-          {/* TITLE */}
-
-          <Text style={styles.title}>{product.productTitle}</Text>
-
-          {/* AVAILABILITY */}
-
-          <View style={styles.metaRow}>
-            {!outOfStock ? (
-              <View style={styles.availablePill}>
-                <View style={styles.availableDot} />
-
-                <Text style={styles.availableText}>In stock</Text>
-              </View>
+            {product.imagesPath ? (
+              <Image
+                source={{
+                  uri: product.imagesPath,
+                }}
+                style={styles.image}
+              />
             ) : (
-              <View style={styles.unavailablePill}>
-                <View style={styles.unavailableDot} />
-
-                <Text style={styles.unavailableText}>Out of stock</Text>
-              </View>
-            )}
-
-            {product.discPercentage > 0 && (
-              <Text style={styles.saveText}>Save {formatRs(savingAmount)}</Text>
-            )}
-          </View>
-
-          {/* =================================
-              DESCRIPTION
-          ================================= */}
-
-          {product.productDescription && product.productDescription !== "-" && (
-            <View style={styles.descriptionCard}>
-              <View style={styles.sectionHeader}>
-                <View style={styles.sectionIcon}>
+              <View style={styles.imageFallback}>
+                <View style={styles.fallbackIcon}>
                   <Ionicons
-                    name="information-outline"
-                    size={17}
-                    color={ORANGE}
+                    name="image-outline"
+                    size={38}
+                    color={colors.primaryDark}
                   />
                 </View>
 
-                <Text style={styles.sectionTitle}>About this product</Text>
+                <Text style={styles.fallbackText}>No image available</Text>
               </View>
-
-              <Text style={styles.description}>
-                {product.productDescription}
-              </Text>
-            </View>
-          )}
-
-          {/* =================================
-              QUANTITY
-          ================================= */}
-
-          {!outOfStock && (
-            <View style={styles.quantityCard}>
-              <View style={styles.quantityHeader}>
-                <View>
-                  <Text style={styles.sectionTitle}>Quantity</Text>
-
-                  <Text style={styles.quantityHint}>
-                    Select the quantity...
-                  </Text>
-                </View>
-
-                <View style={styles.quantitySelector}>
-                  <TouchableOpacity
-                    style={[
-                      styles.quantityButton,
-                      !canDecrease && styles.quantityDisabled,
-                    ]}
-                    activeOpacity={0.75}
-                    disabled={!canDecrease}
-                    onPress={decrease}
-                  >
-                    <Ionicons
-                      name="remove"
-                      size={18}
-                      color={
-                        canDecrease ? colors.textPrimary : colors.textSecondary
-                      }
-                    />
-                  </TouchableOpacity>
-
-                  <View style={styles.quantityValueBox}>
-                    <Text style={styles.quantityValue}>{qty}</Text>
-                  </View>
-
-                  <TouchableOpacity
-                    style={[
-                      styles.quantityButton,
-                      !canIncrease && styles.quantityDisabled,
-                    ]}
-                    activeOpacity={0.75}
-                    disabled={!canIncrease}
-                    onPress={increase}
-                  >
-                    <Ionicons
-                      name="add"
-                      size={18}
-                      color={
-                        canIncrease ? colors.textPrimary : colors.textSecondary
-                      }
-                    />
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              {stock !== Infinity && (
-                <Text style={styles.stockText}>{stock} available</Text>
-              )}
-            </View>
-          )}
-
-          {/* =================================
-              ORDER SUMMARY
-          ================================= */}
-
-          {!outOfStock && (
-            <View style={styles.summaryCard}>
-              <View style={styles.summaryIcon}>
-                <Ionicons name="receipt-outline" size={19} color={ORANGE} />
-              </View>
-
-              <View style={styles.summaryContent}>
-                <Text style={styles.summaryTitle}>Order total</Text>
-
-                <Text style={styles.summarySubtitle}>
-                  {qty} {qty === 1 ? "item" : "items"}
-                </Text>
-              </View>
-
-              <Text style={styles.summaryPrice}>{formatRs(totalPrice)}</Text>
-            </View>
-          )}
-
-          <View style={styles.bottomSpacing} />
+            )}
+          </View>
         </View>
-      </ScrollView>
 
-      {/* =========================================
-          FIXED FOOTER
-      ========================================= */}
+        {/* PRODUCT NAME + PRICE */}
 
-      {!outOfStock && (
-        <View style={styles.footer}>
-          <View style={styles.footerTotal}>
-            <Text style={styles.footerLabel}>Total</Text>
-
-            <Text style={styles.footerPrice}>{formatRs(totalPrice)}</Text>
+        <View style={styles.productHeader}>
+          <View style={styles.productNameWrapper}>
+            <Text style={styles.title}>{product.productTitle}</Text>
           </View>
 
+          <Text style={styles.price}>{formatRs(product.salePrice)}</Text>
+        </View>
+
+        {/* QUANTITY + ADD TO CART */}
+
+        <View style={styles.cartSection}>
+          <View style={styles.quantityBlock}>
+            <Text style={styles.quantityLabel}>Quantity</Text>
+
+            <View style={styles.quantitySelector}>
+              <TouchableOpacity
+                style={[
+                  styles.quantityButton,
+                  !canDecrease && styles.quantityDisabled,
+                ]}
+                activeOpacity={0.75}
+                disabled={!canDecrease}
+                onPress={decrease}
+              >
+                <Ionicons
+                  name="remove"
+                  size={18}
+                  color={
+                    canDecrease ? colors.textPrimary : colors.textSecondary
+                  }
+                />
+              </TouchableOpacity>
+
+              <View style={styles.quantityValueBox}>
+                <Text style={styles.quantityValue}>{qty}</Text>
+              </View>
+
+              <TouchableOpacity
+                style={[
+                  styles.quantityButton,
+                  !canIncrease && styles.quantityDisabled,
+                ]}
+                activeOpacity={0.75}
+                disabled={!canIncrease}
+                onPress={increase}
+              >
+                <Ionicons
+                  name="add"
+                  size={18}
+                  color={
+                    canIncrease ? colors.textPrimary : colors.textSecondary
+                  }
+                />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* ADD TO CART */}
+
           <TouchableOpacity
-            style={styles.addButton}
+            style={[
+              styles.addButton,
+              isAddedToCart && styles.addedButton,
+              qty === 0 && styles.addButtonDisabled,
+            ]}
             activeOpacity={0.85}
+            disabled={qty === 0}
             onPress={handleAddToCart}
           >
-            <Ionicons name="cart-outline" size={21} color="#FFFFFF" />
+            <Ionicons
+              name={isAddedToCart ? "checkmark-circle-outline" : "cart-outline"}
+              size={20}
+              color={colors.white}
+            />
 
             <Text style={styles.addButtonText}>
-              {inCart > 0 ? "Update Cart" : "Add to Cart"}
+              {isAddedToCart ? "Added to Cart" : "Add to Cart"}
             </Text>
           </TouchableOpacity>
         </View>
-      )}
+
+        {/* PRODUCT DETAILS */}
+
+        <View style={styles.detailsSection}>
+          <View style={styles.detailsHeader}>
+            <View style={styles.detailsIcon}>
+              <Ionicons
+                name="information-outline"
+                size={18}
+                color={colors.primaryDark}
+              />
+            </View>
+
+            <Text style={styles.detailsTitle}>Product Details</Text>
+          </View>
+
+          {product.productDescription &&
+          product.productDescription.trim() !== "" &&
+          product.productDescription !== "-" ? (
+            <Text style={styles.description}>{product.productDescription}</Text>
+          ) : (
+            <Text style={styles.noDescription}>
+              No product description available.
+            </Text>
+          )}
+        </View>
+
+        {/* EXTRA SPACE SO CONTENT IS NOT HIDDEN BEHIND STICKY FOOTER */}
+
+        <View style={styles.footerSpace} />
+      </ScrollView>
+
+      {/* STICKY FOOTER - ALWAYS AT BOTTOM */}
+
+      <View style={styles.checkoutBar}>
+        {/* TOTAL */}
+
+        <View style={styles.totalSection}>
+          <Text style={styles.totalLabel}>
+            Total ({qty} {qty === 1 ? "Item" : "Items"})
+          </Text>
+
+          <Text style={styles.totalPrice}>{formatRs(totalPrice)}</Text>
+        </View>
+
+        {/* CHECKOUT BUTTON */}
+
+        <TouchableOpacity
+          style={[
+            styles.checkoutButton,
+            !canCheckout && styles.checkoutButtonDisabled,
+          ]}
+          activeOpacity={canCheckout ? 0.85 : 1}
+          disabled={!canCheckout}
+          onPress={handleCheckout}
+        >
+          <Text
+            style={[
+              styles.checkoutButtonText,
+              !canCheckout && styles.checkoutButtonTextDisabled,
+            ]}
+            numberOfLines={1}
+            ellipsizeMode="clip"
+          >
+            Checkout
+          </Text>
+
+          <Ionicons
+            name="arrow-forward"
+            size={25}
+            color={canCheckout ? colors.white : colors.textSecondary}
+            style={styles.checkoutArrow}
+          />
+        </TouchableOpacity>
+      </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  /* =========================================
-     SCREEN
-  ========================================= */
+  /* SCREEN */
 
   container: {
     flex: 1,
     backgroundColor: colors.background,
+    paddingTop: 4,
   },
-
-  /* =========================================
-     SCROLL CONTENT
-  ========================================= */
 
   scrollContent: {
-    paddingBottom: spacing.xxl,
+    paddingTop: 0,
+
+    /*
+     * Keeps the last content above the sticky
+     * checkout footer.
+     */
+    paddingBottom: 90,
   },
 
-  /* =========================================
-     PRODUCT VISUAL
-  ========================================= */
+  /* PRODUCT IMAGE */
 
   visualWrapper: {
     marginHorizontal: spacing.lg,
-    marginTop: spacing.lg,
-
-    position: "relative",
+    marginTop: 0,
+    paddingTop: 0,
   },
 
   imageCard: {
     width: "100%",
-
-    aspectRatio: 0.98,
-
-    borderRadius: radius.lg,
+    aspectRatio: 1,
 
     backgroundColor: colors.card,
 
-    borderWidth: 2,
-    borderColor: colors.primaryDark,
+    borderRadius: radius.lg,
 
-    overflow: "hidden",
-
-    padding: spacing.sm,
-  },
-
-  imageInner: {
-    flex: 1,
-
-    borderRadius: radius.md,
-
-    backgroundColor: colors.background,
-
-    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "#FFDCC2",
+    padding: spacing.md,
 
     alignItems: "center",
     justifyContent: "center",
+
+    overflow: "hidden",
   },
 
   image: {
     width: "94%",
     height: "94%",
-
     resizeMode: "contain",
   },
 
@@ -491,12 +469,12 @@ const styles = StyleSheet.create({
   },
 
   fallbackIcon: {
-    width: 62,
-    height: 62,
+    width: 64,
+    height: 64,
 
     borderRadius: radius.pill,
 
-    backgroundColor: SOFT_ORANGE,
+    backgroundColor: colors.background,
 
     alignItems: "center",
     justifyContent: "center",
@@ -504,186 +482,192 @@ const styles = StyleSheet.create({
 
   fallbackText: {
     ...typography.caption,
-
     color: colors.textSecondary,
   },
 
-  /* =========================================
-     DISCOUNT
-  ========================================= */
+  /* PRODUCT HEADER */
 
-  discountBadge: {
-    position: "absolute",
-
-    left: spacing.md,
-    bottom: spacing.md,
-
-    backgroundColor: ORANGE,
-
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 6,
-
-    borderRadius: radius.pill,
-
-    flexDirection: "row",
-
-    alignItems: "center",
-
-    gap: 5,
-  },
-
-  discountBadgeText: {
-    fontSize: 10,
-
-    color: "#FFFFFF",
-
-    fontWeight: "900",
-
-    letterSpacing: 0.4,
-  },
-
-  /* =========================================
-     WISHLIST
-  ========================================= */
-
-  wishlistButton: {
-    position: "absolute",
-
-    top: spacing.md,
-    right: spacing.md,
-
-    width: 44,
-    height: 44,
-
-    borderRadius: radius.pill,
-
-    backgroundColor: colors.card,
-
-    borderWidth: 1,
-    borderColor: colors.border,
-
-    alignItems: "center",
-    justifyContent: "center",
-
-    shadowColor: "#000",
-
-    shadowOffset: {
-      width: 0,
-      height: 3,
-    },
-
-    shadowOpacity: 0.1,
-
-    shadowRadius: 6,
-
-    elevation: 4,
-  },
-
-  wishlistButtonActive: {
-    backgroundColor: SOFT_ORANGE,
-
-    borderColor: ORANGE_LIGHT,
-  },
-
-  /* =========================================
-     PRODUCT INFORMATION
-  ========================================= */
-
-  infoContainer: {
+  productHeader: {
     paddingHorizontal: spacing.lg,
 
     paddingTop: spacing.lg,
+
+    flexDirection: "row",
+
+    alignItems: "flex-start",
+
+    justifyContent: "space-between",
+
+    gap: spacing.md,
+  },
+
+  productNameWrapper: {
+    flex: 1,
+
+    paddingRight: spacing.sm,
   },
 
   title: {
-    ...typography.h1,
+    ...typography.h2,
 
     color: colors.textPrimary,
 
     fontWeight: "700",
 
-    lineHeight: 34,
-
-    marginBottom: spacing.sm,
+    lineHeight: 30,
   },
 
-  /* =========================================
-     AVAILABILITY
-  ========================================= */
+  price: {
+    ...typography.h2,
 
-  metaRow: {
+    color: colors.primaryDark,
+
+    fontWeight: "800",
+
+    lineHeight: 30,
+
+    textAlign: "right",
+  },
+
+  /* QUANTITY + ADD TO CART */
+
+  cartSection: {
+    paddingHorizontal: spacing.lg,
+
+    marginTop: spacing.sm,
+
+    flexDirection: "row",
+
+    alignItems: "flex-end",
+
+    gap: spacing.md,
+  },
+
+  quantityBlock: {
+    flex: 1,
+    minWidth: 0,
+  },
+
+  quantityLabel: {
+    ...typography.caption,
+
+    color: colors.textSecondary,
+
+    fontWeight: "700",
+
+    marginBottom: spacing.xs,
+  },
+
+  quantitySelector: {
+    height: 52,
+
     flexDirection: "row",
 
     alignItems: "center",
 
-    justifyContent: "space-between",
+    backgroundColor: colors.card,
 
-    marginBottom: spacing.md,
+    borderWidth: 1,
+
+    borderColor: colors.border,
+
+    borderRadius: radius.md,
+
+    paddingHorizontal: 5,
   },
 
-  availablePill: {
+  quantityButton: {
+    width: 42,
+    height: 42,
+
+    borderRadius: radius.sm,
+
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  quantityDisabled: {
+    opacity: 0.35,
+  },
+
+  quantityValueBox: {
+    flex: 1,
+
+    height: 42,
+
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  quantityValue: {
+    ...typography.h3,
+
+    color: colors.textPrimary,
+
+    fontWeight: "800",
+  },
+
+  addButton: {
+    flex: 1,
+
+    minHeight: 52,
+
+    minWidth: 0,
+
+    borderRadius: radius.md,
+
+    backgroundColor: colors.primaryDark,
+
     flexDirection: "row",
 
     alignItems: "center",
+    justifyContent: "center",
 
-    gap: 6,
+    gap: spacing.sm,
+
+    paddingHorizontal: spacing.md,
+
+    shadowColor: colors.primaryDark,
+
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+
+    shadowOpacity: 0.18,
+
+    shadowRadius: 8,
+
+    elevation: 4,
   },
 
-  availableDot: {
-    width: 7,
-    height: 7,
-
-    borderRadius: 4,
-
-    backgroundColor: colors.success,
+  addedButton: {
+    backgroundColor: colors.primaryLight,
   },
 
-  availableText: {
-    ...typography.caption,
+  addButtonDisabled: {
+    opacity: 0.5,
+  },
 
-    color: colors.success,
+  addButtonText: {
+    ...typography.button,
+
+    color: colors.white,
 
     fontWeight: "700",
+
+    textAlign: "center",
+
+    flexShrink: 1,
   },
 
-  unavailablePill: {
-    flexDirection: "row",
+  /* PRODUCT DETAILS */
 
-    alignItems: "center",
+  detailsSection: {
+    marginHorizontal: spacing.lg,
 
-    gap: 6,
-  },
+    marginTop: spacing.md,
 
-  unavailableDot: {
-    width: 7,
-    height: 7,
-
-    borderRadius: 4,
-
-    backgroundColor: colors.danger,
-  },
-
-  unavailableText: {
-    ...typography.caption,
-
-    color: colors.danger,
-
-    fontWeight: "700",
-  },
-
-  saveText: {
-    ...typography.caption,
-
-    color: ORANGE,
-
-    fontWeight: "700",
-  },
-
-  /* =========================================
-     DESCRIPTION
-  ========================================= */
-
-  descriptionCard: {
     backgroundColor: colors.card,
 
     borderWidth: 1,
@@ -693,11 +677,9 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
 
     padding: spacing.md,
-
-    marginBottom: spacing.md,
   },
 
-  sectionHeader: {
+  detailsHeader: {
     flexDirection: "row",
 
     alignItems: "center",
@@ -707,19 +689,19 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
 
-  sectionIcon: {
-    width: 34,
-    height: 34,
+  detailsIcon: {
+    width: 36,
+    height: 36,
 
-    borderRadius: 17,
+    borderRadius: radius.pill,
 
-    backgroundColor: SOFT_ORANGE,
+    backgroundColor: colors.background,
 
     alignItems: "center",
     justifyContent: "center",
   },
 
-  sectionTitle: {
+  detailsTitle: {
     ...typography.h3,
 
     color: colors.textPrimary,
@@ -735,247 +717,153 @@ const styles = StyleSheet.create({
     lineHeight: 23,
   },
 
-  /* =========================================
-     QUANTITY
-  ========================================= */
-
-  quantityCard: {
-    backgroundColor: colors.card,
-
-    borderWidth: 1,
-
-    borderColor: colors.border,
-
-    borderRadius: radius.md,
-
-    padding: spacing.md,
-
-    marginBottom: spacing.md,
-  },
-
-  quantityHeader: {
-    flexDirection: "row",
-
-    alignItems: "center",
-
-    justifyContent: "space-between",
-
-    gap: spacing.md,
-  },
-
-  quantityHint: {
-    ...typography.caption,
-
-    color: colors.textSecondary,
-
-    marginTop: 3,
-  },
-
-  quantitySelector: {
-    flexDirection: "row",
-
-    alignItems: "center",
-
-    gap: 7,
-  },
-
-  quantityButton: {
-    width: 36,
-    height: 36,
-
-    borderRadius: radius.pill,
-
-    backgroundColor: colors.background,
-
-    borderWidth: 1,
-
-    borderColor: colors.border,
-
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  quantityDisabled: {
-    opacity: 0.4,
-  },
-
-  quantityValueBox: {
-    width: 40,
-    height: 36,
-
-    borderRadius: radius.sm,
-
-    backgroundColor: SOFT_ORANGE,
-
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  quantityValue: {
-    ...typography.h3,
-
-    color: ORANGE,
-
-    fontWeight: "800",
-  },
-
-  stockText: {
-    ...typography.caption,
-
-    color: colors.textSecondary,
-
-    marginTop: spacing.sm,
-  },
-
-  /* =========================================
-     ORDER SUMMARY
-  ========================================= */
-
-  summaryCard: {
-    flexDirection: "row",
-
-    alignItems: "center",
-
-    backgroundColor: colors.card,
-
-    borderWidth: 1,
-
-    borderColor: colors.border,
-
-    borderRadius: radius.md,
-
-    padding: spacing.md,
-  },
-
-  summaryIcon: {
-    width: 42,
-    height: 42,
-
-    borderRadius: 21,
-
-    backgroundColor: SOFT_ORANGE,
-
-    alignItems: "center",
-    justifyContent: "center",
-
-    marginRight: spacing.sm,
-  },
-
-  summaryContent: {
-    flex: 1,
-  },
-
-  summaryTitle: {
+  noDescription: {
     ...typography.body,
 
-    color: colors.textPrimary,
-
-    fontWeight: "700",
-  },
-
-  summarySubtitle: {
-    ...typography.caption,
-
     color: colors.textSecondary,
 
-    marginTop: 2,
+    lineHeight: 23,
   },
 
-  summaryPrice: {
-    ...typography.h3,
+  /* STICKY CHECKOUT BAR */
 
-    color: ORANGE,
+  checkoutBar: {
+    position: "absolute",
 
-    fontWeight: "800",
-  },
+    left: 0,
+    right: 0,
+    bottom: 0,
 
-  bottomSpacing: {
-    height: spacing.lg,
-  },
+    backgroundColor: colors.card,
 
-  /* =========================================
-     FIXED FOOTER
-  ========================================= */
+    borderTopWidth: 1,
 
-  footer: {
-    flexDirection: "row",
-
-    alignItems: "center",
-    justifyContent: "space-between",
-
-    gap: spacing.md,
+    borderTopColor: colors.border,
 
     paddingHorizontal: spacing.lg,
 
     paddingTop: spacing.sm,
-    paddingBottom: spacing.md,
 
-    backgroundColor: colors.background,
-
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
-  footerTotal: {
-    minWidth: 82,
-  },
-
-  footerLabel: {
-    ...typography.caption,
-
-    color: colors.textSecondary,
-
-    marginBottom: 2,
-  },
-
-  footerPrice: {
-    ...typography.h3,
-
-    color: colors.textPrimary,
-
-    fontWeight: "800",
-  },
-
-  addButton: {
-    width: 140,
-
-    minHeight: 52,
-
-    borderRadius: radius.md,
-
-    backgroundColor: ORANGE,
+    paddingBottom: spacing.sm,
 
     flexDirection: "row",
 
     alignItems: "center",
+
+    justifyContent: "space-between",
+
+    gap: spacing.md,
+
+    shadowColor: colors.black,
+
+    shadowOffset: {
+      width: 0,
+      height: -3,
+    },
+
+    shadowOpacity: 0.08,
+
+    shadowRadius: 8,
+
+    elevation: 10,
+
+    zIndex: 100,
+  },
+
+  /* TOTAL */
+
+  totalSection: {
+    flex: 1,
+
+    justifyContent: "center",
+
+    minWidth: 0,
+    paddingBottom: 7,
+  },
+
+  totalLabel: {
+    ...typography.caption,
+
+    color: colors.textPrimary,
+
+    fontWeight: "600",
+
+    marginBottom: 2,
+  },
+
+  totalPrice: {
+    ...typography.h2,
+
+    color: colors.primaryDark,
+
+    fontWeight: "800",
+
+    lineHeight: 30,
+  },
+
+  /* CHECKOUT BUTTON */
+
+  checkoutButton: {
+    minHeight: 50,
+
+    marginBottom: 3,
+
+    width: 130,
+
+    borderRadius: radius.md,
+
+    backgroundColor: colors.primaryDark,
+
+    paddingHorizontal: spacing.sm,
+
+    flexDirection: "row",
+
+    alignItems: "center",
+
     justifyContent: "center",
 
     gap: spacing.sm,
 
-    shadowColor: ORANGE,
-
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-
-    shadowOpacity: 0.22,
-
-    shadowRadius: 8,
-
-    elevation: 5,
+    overflow: "hidden",
   },
 
-  addButtonText: {
+  checkoutButtonDisabled: {
+    backgroundColor: colors.border,
+
+    opacity: 0.9,
+  },
+
+  checkoutButtonText: {
     ...typography.button,
 
-    color: "#FFFFFF",
+    color: colors.white,
 
     fontWeight: "700",
+
+    fontSize: 16,
+
+    textAlign: "center",
+
+    flexShrink: 1,
+
+    minWidth: 0,
   },
 
-  /* =========================================
-     CENTER STATES
-  ========================================= */
+  checkoutButtonTextDisabled: {
+    color: colors.textSecondary,
+  },
+
+  checkoutArrow: {
+    flexShrink: 0,
+  },
+
+  /* FOOTER SPACING */
+
+  footerSpace: {
+    height: spacing.xl,
+  },
+
+  /* LOADING / ERROR */
 
   centerState: {
     flex: 1,
@@ -991,16 +879,15 @@ const styles = StyleSheet.create({
     width: 66,
     height: 66,
 
-    borderRadius: 33,
+    borderRadius: radius.pill,
 
-    backgroundColor: SOFT_ORANGE,
+    backgroundColor: colors.card,
 
     borderWidth: 1,
 
-    borderColor: "#FFD5BA",
+    borderColor: colors.primaryLight,
 
     alignItems: "center",
-
     justifyContent: "center",
 
     marginBottom: spacing.md,
@@ -1039,7 +926,7 @@ const styles = StyleSheet.create({
 
     borderRadius: radius.pill,
 
-    backgroundColor: ORANGE,
+    backgroundColor: colors.primaryDark,
 
     flexDirection: "row",
 
@@ -1053,7 +940,7 @@ const styles = StyleSheet.create({
   retryText: {
     ...typography.caption,
 
-    color: "#FFFFFF",
+    color: colors.white,
 
     fontWeight: "700",
   },
