@@ -1,47 +1,63 @@
 import type { GoogleUserInfo } from "@/types/google";
 
-const GOOGLE_USER_INFO_URL = "https://www.googleapis.com/userinfo/v2/me";
+const GOOGLE_USER_INFO_URL =
+  "https://www.googleapis.com/userinfo/v2/me";
 
 /**
  * Fetch the authenticated Google user's profile.
  *
- * IMPORTANT:
- * This function only talks to Google.
- * It does NOT talk to our backend yet.
+ * This function communicates only with Google.
+ * It does NOT register the user in our backend.
  *
- * Later we will send the Google identity/token
- * to our own backend from a separate API function.
+ * Backend registration is handled separately through signupUser().
  */
 export async function getGoogleUserInfo(
   accessToken: string,
 ): Promise<GoogleUserInfo> {
   if (!accessToken) {
-    throw new Error("Google access token is missing.");
+    throw new Error(
+      "Google access token is missing.",
+    );
   }
 
-  const response = await fetch(GOOGLE_USER_INFO_URL, {
-    method: "GET",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-    },
-  });
+  console.log(
+    "[GOOGLE USER INFO] Fetching Google profile...",
+  );
 
-  const responseText = await response.text();
+  const response = await fetch(
+    GOOGLE_USER_INFO_URL,
+    {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    },
+  );
+
+  const responseText =
+    await response.text();
 
   let data: any = null;
 
   try {
-    data = responseText ? JSON.parse(responseText) : null;
+    data = responseText
+      ? JSON.parse(responseText)
+      : null;
   } catch {
     data = responseText;
   }
 
-  console.log("====================================");
-  console.log("[GOOGLE] User info status:", response.status);
-  console.log("[GOOGLE] User info response:", data);
-  console.log("====================================");
+  console.log(
+    "[GOOGLE USER INFO] HTTP status:",
+    response.status,
+  );
 
   if (!response.ok) {
+    console.error(
+      "[GOOGLE USER INFO] Request failed:",
+      data,
+    );
+
     throw new Error(
       data?.error_description ||
         data?.error ||
@@ -50,17 +66,47 @@ export async function getGoogleUserInfo(
     );
   }
 
-  if (!data?.email) {
-    throw new Error("Google did not return an email address.");
+  if (!data?.id) {
+    throw new Error(
+      "Google did not return a user ID.",
+    );
   }
 
-  return {
-    id: data.id,
-    email: data.email,
-    name: data.name ?? "",
-    picture: data.picture ?? "",
-    given_name: data.given_name ?? "",
-    family_name: data.family_name ?? "",
-    verified_email: data.verified_email,
+  if (!data?.email) {
+    throw new Error(
+      "Google did not return an email address.",
+    );
+  }
+
+  const userInfo: GoogleUserInfo = {
+    id: String(data.id),
+    email: String(data.email),
+    name: String(data.name ?? ""),
+    picture: String(data.picture ?? ""),
+    given_name: data.given_name
+      ? String(data.given_name)
+      : undefined,
+    family_name: data.family_name
+      ? String(data.family_name)
+      : undefined,
+    verified_email:
+      typeof data.verified_email ===
+      "boolean"
+        ? data.verified_email
+        : undefined,
   };
+
+  console.log(
+    "[GOOGLE USER INFO] User received:",
+    {
+      id: userInfo.id,
+      email: userInfo.email,
+      name: userInfo.name,
+      hasPicture: !!userInfo.picture,
+      verifiedEmail:
+        userInfo.verified_email,
+    },
+  );
+
+  return userInfo;
 }

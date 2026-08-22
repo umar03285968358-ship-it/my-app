@@ -3,7 +3,10 @@ import GoogleButton from "@/components/GoogleButton";
 import Input from "@/components/Input";
 import { colors, spacing, typography } from "@/constants/theme";
 import { useGoogleAuth } from "@/hooks/useGoogleAuth";
-import { loginUser } from "@/services/api";
+import {
+  loginUser,
+  signupGoogleUser,
+} from "@/services/api";
 import { saveSession } from "@/services/authStorage";
 import { router } from "expo-router";
 import React, { useState } from "react";
@@ -23,14 +26,10 @@ const { width } = Dimensions.get("window");
  * ============================================================
  * ROUTE RESOLVER
  * ============================================================
- *
- * Decides where to send the user after login based on
- * userType returned by the API.
- *
- * - "Rider"    -> rider dashboard/orders tab group
- * - anything else (e.g. "Customer") -> normal customer tabs
  */
-function resolvePostLoginRoute(user: any): "/(rider)/dashboard" | "/(tabs)" {
+function resolvePostLoginRoute(
+  user: any,
+): "/(rider)/dashboard" | "/(tabs)" {
   const userType = String(user?.userType ?? "")
     .trim()
     .toLowerCase();
@@ -45,125 +44,126 @@ function resolvePostLoginRoute(user: any): "/(rider)/dashboard" | "/(tabs)" {
 export default function LoginScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-
   const [loading, setLoading] = useState(false);
 
   /*
    * ============================================================
-   * GOOGLE LOGIN
+   * HANDLE LOGIN (Shared by Normal and Google)
    * ============================================================
-   *
-   * Google is frontend-only.
-   *
-   * Google account
-   *      ↓
-   * Google profile
-   *      ↓
-   * AsyncStorage
-   *      ↓
-   * Tabs
-   *
-   * No backend Google API is used.
-   *
-   * NOTE: Google sign-in has no userType from your backend,
-   * so it always goes to the customer tabs. Riders are expected
-   * to use normal email/password login.
    */
-  const { promptGoogleLogin, loading: googleLoading } = useGoogleAuth({
-    onSuccess: async (user, accessToken) => {
-      try {
-        console.log("====================================");
-        console.log("[LOGIN SCREEN] GOOGLE LOGIN SUCCESS");
-        console.log("[LOGIN SCREEN] Google User:", user);
-        console.log("====================================");
+  const handleLoginSuccess = async (
+    loginEmail: string,
+    loginPassword: string,
+    isGoogle: boolean,
+  ) => {
+    try {
+      console.log("");
+      console.log("====================================");
+      console.log(
+        `[LOGIN SCREEN] STARTING ${
+          isGoogle ? "GOOGLE" : "NORMAL"
+        } LOGIN`,
+      );
+      console.log("====================================");
+      console.log("[LOGIN SCREEN] Email:", loginEmail);
+      console.log(
+        "[LOGIN SCREEN] Password:",
+        isGoogle ? '"!@#" (Google)' : "PROVIDED",
+      );
+      console.log(
+        "[LOGIN SCREEN] RegType:",
+        isGoogle ? "Google" : "Normal",
+      );
 
-        /*
-         * Store the Google access token and Google profile
-         * in the same AsyncStorage session used by
-         * normal login.
-         */
-        await saveSession(`google:${accessToken}`, {
-          ...user,
+      const response = await loginUser(
+        loginEmail,
+        loginPassword,
+        isGoogle ? "Google" : "Normal",
+      );
 
-          /*
-           * Extra fields make it easier to identify
-           * this locally stored session later.
-           */
-          authProvider: "google",
-          googleId: user.id,
-          googleAccessToken: accessToken,
-        });
+      console.log(
+        "[LOGIN SCREEN] Login API response:",
+        response,
+      );
 
-        console.log("[LOGIN SCREEN] Google session saved to AsyncStorage.");
+      const backendMessage = String(
+        response?.msg ??
+          response?.message ??
+          "",
+      ).trim();
 
-        /*
-         * Enter the application.
-         */
-        router.replace("/(tabs)");
-      } catch (error: any) {
-        console.log("[LOGIN SCREEN] Failed to save Google session:", error);
+      const normalizedMessage =
+        backendMessage.toLowerCase();
 
-        Alert.alert(
-          "Google Login Failed",
-          error?.message ?? "Unable to save your Google session.",
+      console.log(
+        "[LOGIN SCREEN] Backend message:",
+        backendMessage,
+      );
+
+      /*
+       * ========================================================
+       * DETECT EXPLICIT BACKEND FAILURE
+       * ========================================================
+       */
+      const hasExplicitFailure =
+        normalizedMessage.includes("invalid user") ||
+        normalizedMessage.includes("invalid password") ||
+        normalizedMessage.includes("invalid login") ||
+        normalizedMessage.includes("login failed") ||
+        normalizedMessage.includes("user not found") ||
+        normalizedMessage.includes("account not found") ||
+        normalizedMessage.includes("incorrect password") ||
+        normalizedMessage.includes("wrong password") ||
+        normalizedMessage.includes("unauthorized") ||
+        normalizedMessage.includes("not exist");
+
+      if (hasExplicitFailure) {
+        console.warn(
+          "[LOGIN SCREEN] Login rejected by backend:",
+          backendMessage,
+        );
+
+        throw new Error(
+          backendMessage ||
+            "Unable to login. Please check your credentials.",
         );
       }
-    },
-
-    onError: (message) => {
-      console.log("====================================");
-      console.log("[LOGIN SCREEN] GOOGLE LOGIN FAILED");
-      console.log("[LOGIN SCREEN] Error:", message);
-      console.log("====================================");
-
-      Alert.alert("Google Login Failed", message);
-    },
-  });
-
-  /*
-   * ============================================================
-   * NORMAL LOGIN
-   * ============================================================
-   *
-   * Your existing login API remains unchanged.
-   */
-  const handleLogin = async () => {
-    try {
-      setLoading(true);
-
-      console.log("====================================");
-      console.log("[LOGIN SCREEN] Starting login...");
-      console.log("[LOGIN SCREEN] Email:", email.trim());
-      console.log("====================================");
-
-      const response = await loginUser(email.trim(), password);
-
-      console.log("====================================");
-      console.log("[LOGIN SCREEN] Login API response:", response);
-      console.log("====================================");
 
       /*
-       * API returned HTTP 200-299.
-       *
-       * Your API wraps the actual user inside
-       * response.user.
+       * ========================================================
+       * EXTRACT USER
+       * ========================================================
        */
-      const loggedInUser = response?.user?.[0] ?? response?.user ?? null;
+      const loggedInUser =
+        response?.user?.[0] ??
+        response?.user ??
+        null;
 
       if (!loggedInUser) {
-        throw new Error("Login succeeded but no user data was returned.");
+        console.warn(
+          "[LOGIN SCREEN] Login response did not contain user data.",
+        );
+
+        throw new Error(
+          backendMessage ||
+            "Unable to login. Please check your credentials.",
+        );
       }
 
-      console.log("====================================");
-      console.log("[LOGIN SCREEN] Unwrapped user to save:", loggedInUser);
-      console.log("[LOGIN SCREEN] userType:", loggedInUser?.userType);
-      console.log("[LOGIN SCREEN] riderID:", loggedInUser?.riderID);
-      console.log("====================================");
+      console.log(
+        "[LOGIN SCREEN] User returned by API:",
+        loggedInUser,
+      );
+
+      console.log(
+        "[LOGIN SCREEN] userType:",
+        loggedInUser?.userType,
+      );
 
       /*
-       * Use the token if your backend returns one.
-       *
-       * Otherwise keep your existing fallback.
+       * ========================================================
+       * BACKEND TOKEN
+       * ========================================================
        */
       const token =
         response?.Token ??
@@ -172,39 +172,354 @@ export default function LoginScreen() {
         response?.accessToken ??
         "logged-in";
 
-      await saveSession(token, loggedInUser);
-
-      setLoading(false);
+      console.log(
+        "[LOGIN SCREEN] Backend token available:",
+        token ? "YES" : "NO",
+      );
 
       /*
-       * ============================================================
-       * REDIRECT BASED ON userType
-       * ============================================================
-       *
-       * "Rider"    -> /(rider)  (rider dashboard + orders tabs)
-       * "Customer" -> /(tabs)   (existing customer tabs)
+       * ========================================================
+       * SAVE SESSION
+       * ========================================================
        */
-      const destination = resolvePostLoginRoute(loggedInUser);
+      await saveSession(token, loggedInUser);
 
-      console.log("[LOGIN SCREEN] Redirecting to:", destination);
+      console.log(
+        "[LOGIN SCREEN] ✅ Login session saved.",
+      );
 
-      router.replace(destination);
+      /*
+       * ========================================================
+       * ROUTING
+       * ========================================================
+       */
+      const destination =
+        resolvePostLoginRoute(loggedInUser);
+
+      console.log(
+        "[LOGIN SCREEN] User type:",
+        loggedInUser?.userType,
+      );
+
+      console.log(
+        "[LOGIN SCREEN] Redirecting to:",
+        destination,
+      );
+
+      console.log(
+        "====================================",
+      );
+      console.log(
+        `[LOGIN SCREEN] ${
+          isGoogle ? "GOOGLE" : "NORMAL"
+        } LOGIN SUCCESS`,
+      );
+      console.log(
+        "====================================",
+      );
+      console.log("");
+
+      // For Google login, redirect without alert
+      if (isGoogle) {
+        router.replace(destination);
+      } else {
+        // For normal login, show alert then redirect
+        Alert.alert(
+          "Login Successful",
+          "Welcome back!",
+          [
+            {
+              text: "OK",
+              onPress: () =>
+                router.replace(destination),
+            },
+          ],
+        );
+      }
     } catch (error: any) {
+      console.log("");
       console.log("====================================");
-      console.log("[LOGIN SCREEN] Login failed");
-      console.log("[LOGIN SCREEN] Error:", error);
+      console.log(
+        `[LOGIN SCREEN] ${
+          isGoogle ? "GOOGLE" : "NORMAL"
+        } LOGIN FAILED`,
+      );
       console.log("====================================");
+      console.error(
+        "[LOGIN SCREEN] Login error:",
+        error,
+      );
+      console.log("====================================");
+      console.log("");
 
-      setLoading(false);
+      Alert.alert(
+        "Login Failed",
+        error?.message ||
+          "Unable to login. Please check your credentials.",
+      );
+    }
+  };
+
+  /*
+   * ============================================================
+   * GOOGLE LOGIN (WITH AUTO SIGNUP IF NEEDED)
+   * ============================================================
+   */
+  const {
+    promptGoogleLogin,
+    loading: googleLoading,
+  } = useGoogleAuth({
+    onSuccess: async (user) => {
+      try {
+        console.log("");
+        console.log(
+          "####################################################",
+        );
+        console.log(
+          "############ GOOGLE AUTH SUCCESS ###################",
+        );
+        console.log(
+          "####################################################",
+        );
+
+        console.log(
+          "[LOGIN SCREEN] Google user received:",
+          user,
+        );
+
+        console.log(
+          "[LOGIN SCREEN] Google email:",
+          user?.email,
+        );
+
+        console.log(
+          "[LOGIN SCREEN] Google ID:",
+          user?.id,
+        );
+
+        /*
+         * ========================================================
+         * STEP 1: TRY GOOGLE SIGNUP FIRST
+         * ========================================================
+         * If account doesn't exist, this will create it.
+         * If account already exists, we'll get "Email Already Exist"
+         */
+        const googleFirstName =
+          user.given_name ||
+          user.name.trim().split(" ")[0] ||
+          "";
+
+        const googleLastName =
+          user.family_name ||
+          user.name.trim().split(" ").slice(1).join(" ") ||
+          "";
+
+        console.log(
+          "[LOGIN SCREEN] Attempting Google signup...",
+        );
+
+        let signupResponse;
+        try {
+          signupResponse = await signupGoogleUser({
+            firstName: googleFirstName,
+            lastName: googleLastName,
+            email: user.email,
+            googleId: user.id,
+          });
+
+          console.log(
+            "[LOGIN SCREEN] Google signup response:",
+            signupResponse,
+          );
+        } catch (signupError: any) {
+          console.log(
+            "[LOGIN SCREEN] Signup attempt failed:",
+            signupError?.message,
+          );
+          // Continue to login even if signup fails
+        }
+
+        /*
+         * ========================================================
+         * STEP 2: CHECK IF SIGNUP SUCCEEDED OR EMAIL EXISTS
+         * ========================================================
+         */
+        const signupMessage = String(
+          signupResponse?.msg ?? "",
+        ).trim();
+
+        const normalizedSignupMessage =
+          signupMessage.toLowerCase();
+
+        const isSignupSuccess =
+          normalizedSignupMessage.includes(
+            "data saved successfully",
+          ) ||
+          normalizedSignupMessage.includes(
+            "saved successfully",
+          ) ||
+          normalizedSignupMessage.includes(
+            "user created successfully",
+          ) ||
+          normalizedSignupMessage.includes(
+            "account created successfully",
+          ) ||
+          normalizedSignupMessage.includes(
+            "registration successful",
+          ) ||
+          normalizedSignupMessage.includes(
+            "registered successfully",
+          );
+
+        const isEmailExists =
+          normalizedSignupMessage.includes(
+            "already exist",
+          ) ||
+          normalizedSignupMessage.includes(
+            "already registered",
+          ) ||
+          normalizedSignupMessage.includes(
+            "email exists",
+          );
+
+        console.log(
+          "[LOGIN SCREEN] Signup success:",
+          isSignupSuccess,
+        );
+
+        console.log(
+          "[LOGIN SCREEN] Email exists:",
+          isEmailExists,
+        );
+
+        /*
+         * ========================================================
+         * STEP 3: LOGIN WITH GOOGLE (REGARDLESS OF SIGNUP RESULT)
+         * ========================================================
+         * Whether signup succeeded or email already exists,
+         * we proceed to login with password "!@#" and RegType "Google"
+         */
+        if (isSignupSuccess || isEmailExists) {
+          console.log(
+            "[LOGIN SCREEN] Proceeding to Google login...",
+          );
+
+          await handleLoginSuccess(
+            user.email,
+            "!@#",
+            true,
+          );
+        } else {
+          // Signup failed for some other reason
+          throw new Error(
+            signupMessage ||
+              "Google authentication failed.",
+          );
+        }
+      } catch (error: any) {
+        console.log("");
+        console.log(
+          "####################################################",
+        );
+        console.log(
+          "######## GOOGLE LOGIN FAILED #######################",
+        );
+        console.log(
+          "####################################################",
+        );
+
+        console.error(
+          "[LOGIN SCREEN] Google login failed:",
+          error,
+        );
+
+        console.log(
+          "####################################################",
+        );
+        console.log("");
+
+        Alert.alert(
+          "Google Login Failed",
+          error?.message ??
+            "Unable to login with Google.",
+        );
+      }
+    },
+
+    onError: (message) => {
+      console.log("");
+      console.log(
+        "####################################################",
+      );
+      console.log(
+        "############ GOOGLE AUTH FAILED ####################",
+      );
+      console.log(
+        "####################################################",
+      );
+
+      console.error(
+        "[LOGIN SCREEN] Google error:",
+        message,
+      );
+
+      console.log(
+        "####################################################",
+      );
+      console.log("");
+
+      Alert.alert(
+        "Google Login Failed",
+        message,
+      );
+    },
+  });
+
+  /*
+   * ============================================================
+   * NORMAL EMAIL/PASSWORD LOGIN
+   * ============================================================
+   */
+  const handleLogin = async () => {
+    try {
+      setLoading(true);
+
+      const cleanEmail = email.trim();
+
+      if (!cleanEmail || !password) {
+        Alert.alert(
+          "Login Failed",
+          "Please enter both email and password.",
+        );
+        return;
+      }
+
+      await handleLoginSuccess(
+        cleanEmail,
+        password,
+        false,
+      );
+    } catch (error: any) {
+      console.error(
+        "[LOGIN SCREEN] Login error:",
+        error,
+      );
 
       Alert.alert(
         "Login Failed",
         error?.message ||
           "Unable to login. Please check your email and password.",
       );
+    } finally {
+      setLoading(false);
     }
   };
 
+  /*
+   * ============================================================
+   * RENDER
+   * ============================================================
+   */
   return (
     <ScrollView
       contentContainerStyle={styles.container}
@@ -212,7 +527,6 @@ export default function LoginScreen() {
       showsVerticalScrollIndicator={false}
     >
       <Text style={styles.title}>Welcome Back!</Text>
-
       <Text style={styles.subtitle}>Sign in to continue</Text>
 
       <Image
@@ -222,6 +536,7 @@ export default function LoginScreen() {
         style={styles.image}
       />
 
+      {/* EMAIL */}
       <Input
         placeholder="Email"
         icon="mail-outline"
@@ -232,6 +547,7 @@ export default function LoginScreen() {
         onChangeText={setEmail}
       />
 
+      {/* PASSWORD */}
       <Input
         placeholder="Password"
         icon="lock-closed-outline"
@@ -240,31 +556,41 @@ export default function LoginScreen() {
         onChangeText={setPassword}
       />
 
+      {/* FORGOT PASSWORD */}
       <Text
         style={styles.forgot}
-        onPress={() => router.push("/(auth)/forgot-password")}
+        onPress={() =>
+          router.push("/(auth)/forgot-password")
+        }
       >
         Forgot Password?
       </Text>
 
+      {/* NORMAL LOGIN */}
       <Button
         title="Login"
         onPress={handleLogin}
         loading={loading}
-        style={{
-          marginTop: spacing.sm,
-        }}
+        style={{ marginTop: spacing.sm }}
       />
 
+      {/* GOOGLE */}
       <Text style={styles.orText}>Or Continue with</Text>
 
       <View style={styles.googleContainer}>
-        <GoogleButton onPress={promptGoogleLogin} loading={googleLoading} />
+        <GoogleButton
+          onPress={promptGoogleLogin}
+          loading={googleLoading}
+        />
       </View>
 
+      {/* SIGNUP */}
       <Text style={styles.footerText}>
         Don't have an account?{" "}
-        <Text style={styles.link} onPress={() => router.push("/(auth)/signup")}>
+        <Text
+          style={styles.link}
+          onPress={() => router.push("/(auth)/signup")}
+        >
           Sign Up
         </Text>
       </Text>
@@ -272,6 +598,11 @@ export default function LoginScreen() {
   );
 }
 
+/*
+ * ============================================================
+ * STYLES
+ * ============================================================
+ */
 const styles = StyleSheet.create({
   container: {
     flexGrow: 1,

@@ -1,3 +1,4 @@
+import ClearAllCacheButton from "@/components/ClearAllChacheButton";
 import { colors, radius, spacing, typography } from "@/constants/theme";
 import { useWishlist } from "@/context/WishlistContext";
 import { useMobCategories } from "@/hooks/useMobCategories";
@@ -40,8 +41,11 @@ export default function HomeScreen() {
   // ids by matching against the categories list.
   const resolveIds = (product: MobProduct) => {
     const subcategory = categories.find(
-      (c) => c.type === "SubCat" && c.name === product.subCategoryTitle,
+      (c) =>
+        c.type === "SubCat" &&
+        c.name === product.subCategoryTitle
     );
+
     return {
       catId: subcategory?.parentId ?? null,
       subCatId: subcategory?.id ?? null,
@@ -50,6 +54,7 @@ export default function HomeScreen() {
 
   const goToProduct = (product: MobProduct) => {
     const { catId, subCatId } = resolveIds(product);
+
     router.push({
       pathname: "/product/[id]",
       params: {
@@ -63,7 +68,9 @@ export default function HomeScreen() {
   return (
     <ScrollView
       style={styles.container}
-      contentContainerStyle={{ paddingBottom: spacing.xxl }}
+      contentContainerStyle={{
+        paddingBottom: spacing.xxl,
+      }}
       showsVerticalScrollIndicator={false}
     >
       {/* Search */}
@@ -86,25 +93,35 @@ export default function HomeScreen() {
         <View style={{ flex: 1 }}>
           <Text style={styles.bannerTitle}>20% OFF</Text>
 
-          <Text style={styles.bannerSubtitle}>On All Cakes</Text>
+          <Text style={styles.bannerSubtitle}>
+            On All Cakes
+          </Text>
 
           <TouchableOpacity
             style={styles.bannerBtn}
             activeOpacity={0.8}
-            onPress={() => router.push("/(tabs)/categories")}
+            onPress={() =>
+              router.push("/(tabs)/categories")
+            }
           >
-            <Text style={styles.bannerBtnText}>Order Now</Text>
+            <Text style={styles.bannerBtnText}>
+              Order Now
+            </Text>
           </TouchableOpacity>
         </View>
       </View>
 
       {/* Categories Header */}
       <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Categories</Text>
+        <Text style={styles.sectionTitle}>
+          Categories
+        </Text>
 
         <Text
           style={styles.seeAll}
-          onPress={() => router.push("/(tabs)/categories")}
+          onPress={() =>
+            router.push("/(tabs)/categories")
+          }
         >
           See All
         </Text>
@@ -113,7 +130,9 @@ export default function HomeScreen() {
       {/* Categories */}
       {categoriesLoading ? (
         <View style={styles.categoryLoading}>
-          <ActivityIndicator color={colors.primaryDark} />
+          <ActivityIndicator
+            color={colors.primaryDark}
+          />
         </View>
       ) : categoriesError ? (
         <View style={styles.categoryError}>
@@ -129,7 +148,9 @@ export default function HomeScreen() {
         </View>
       ) : mainCategories.length === 0 ? (
         <View style={styles.categoryError}>
-          <Text style={styles.categoryErrorText}>No categories available</Text>
+          <Text style={styles.categoryErrorText}>
+            No categories available
+          </Text>
         </View>
       ) : (
         <FlatList
@@ -155,7 +176,9 @@ export default function HomeScreen() {
               }
             >
               {/* Category Image */}
-              <View style={styles.categoryImageContainer}>
+              <View
+                style={styles.categoryImageContainer}
+              >
                 {item.image ? (
                   <Image
                     source={{ uri: item.image }}
@@ -184,10 +207,13 @@ export default function HomeScreen() {
         />
       )}
 
-      {/* Wishlist Header — minimal, no heavy badge/quote treatment */}
+      {/* Wishlist Header */}
       <View style={styles.wishlistHeader}>
         <View style={styles.wishlistHeaderLeft}>
-          <Text style={styles.wishlistTitle}>Wishlist</Text>
+          <Text style={styles.wishlistTitle}>
+            Wishlist
+          </Text>
+
           {previewWishlist.length > 0 && (
             <View style={styles.wishlistCountPill}>
               <Text style={styles.wishlistCountText}>
@@ -203,7 +229,9 @@ export default function HomeScreen() {
             onPress={() => router.push("/wishlist")}
             hitSlop={8}
           >
-            <Text style={styles.wishlistViewAll}>View all</Text>
+            <Text style={styles.wishlistViewAll}>
+              View all
+            </Text>
           </TouchableOpacity>
         )}
       </View>
@@ -211,35 +239,52 @@ export default function HomeScreen() {
       {/* Wishlist List */}
       {wishlistLoading ? (
         <View style={styles.categoryLoading}>
-          <ActivityIndicator color={colors.primaryDark} />
+          <ActivityIndicator
+            color={colors.primaryDark}
+          />
         </View>
       ) : previewWishlist.length > 0 ? (
         <View style={styles.wishlistList}>
           {previewWishlist.map((product, index) => {
-            const liked = isWishlisted(product.productID);
-            const isLast = index === previewWishlist.length - 1;
+            const liked = isWishlisted(
+              product.productID
+            );
+
+            const isLast =
+              index === previewWishlist.length - 1;
 
             return (
               <TouchableOpacity
                 key={product.productID}
-                style={[styles.wishRow, isLast && styles.wishRowLast]}
+                style={[
+                  styles.wishRow,
+                  isLast && styles.wishRowLast,
+                ]}
                 activeOpacity={0.7}
-                onPress={() => goToProduct(product)}
+                onPress={() =>
+                  goToProduct(product)
+                }
               >
                 {/* Thumbnail */}
                 <View style={styles.wishThumb}>
                   {product.imagesPath ? (
                     <Image
-                      source={{ uri: product.imagesPath }}
+                      source={{
+                        uri: product.imagesPath,
+                      }}
                       style={styles.wishThumbImage}
                       resizeMode="cover"
                     />
                   ) : (
-                    <View style={styles.wishThumbFallback}>
+                    <View
+                      style={styles.wishThumbFallback}
+                    >
                       <Ionicons
                         name="image-outline"
                         size={18}
-                        color={colors.textSecondary}
+                        color={
+                          colors.textSecondary
+                        }
                       />
                     </View>
                   )}
@@ -254,6 +299,7 @@ export default function HomeScreen() {
                   >
                     {product.productTitle}
                   </Text>
+
                   <Text
                     style={styles.wishRowSub}
                     numberOfLines={1}
@@ -279,24 +325,39 @@ export default function HomeScreen() {
                   hitSlop={8}
                 >
                   <Ionicons
-                    name={liked ? "heart" : "heart-outline"}
+                    name={
+                      liked
+                        ? "heart"
+                        : "heart-outline"
+                    }
                     size={18}
-                    color={liked ? colors.primaryDark : colors.textSecondary}
+                    color={
+                      liked
+                        ? colors.primaryDark
+                        : colors.textSecondary
+                    }
                   />
                 </TouchableOpacity>
               </TouchableOpacity>
             );
           })}
 
-          {wishlistProducts.length > previewWishlist.length && (
+          {wishlistProducts.length >
+            previewWishlist.length && (
             <TouchableOpacity
               style={styles.wishlistMoreRow}
               activeOpacity={0.7}
-              onPress={() => router.push("/wishlist")}
+              onPress={() =>
+                router.push("/wishlist")
+              }
             >
               <Text style={styles.wishlistMoreText}>
-                +{wishlistProducts.length - previewWishlist.length} more saved
+                +
+                {wishlistProducts.length -
+                  previewWishlist.length}{" "}
+                more saved
               </Text>
+
               <Ionicons
                 name="arrow-forward"
                 size={14}
@@ -309,12 +370,19 @@ export default function HomeScreen() {
         <TouchableOpacity
           style={styles.emptyWishlist}
           activeOpacity={0.8}
-          onPress={() => router.push("/wishlist")}
+          onPress={() =>
+            router.push("/wishlist")
+          }
         >
-          <Ionicons name="heart-outline" size={22} color={colors.primaryDark} />
+          <Ionicons
+            name="heart-outline"
+            size={22}
+            color={colors.primaryDark}
+          />
 
           <Text style={styles.emptyWishlistText}>
-            Tap the heart on any product to save it here
+            Tap the heart on any product to save it
+            here
           </Text>
 
           <Ionicons
@@ -324,6 +392,24 @@ export default function HomeScreen() {
           />
         </TouchableOpacity>
       )}
+
+      {/* ================================================== */}
+      {/* CLEAR ALL APP CACHE */}
+      {/* ================================================== */}
+
+      <View style={styles.clearCacheSection}>
+        <Text style={styles.clearCacheTitle}>
+          App Storage
+        </Text>
+
+        <Text style={styles.clearCacheDescription}>
+          Remove all locally stored app data,
+          including authentication, cart, wishlist
+          and other AsyncStorage data.
+        </Text>
+
+        <ClearAllCacheButton />
+      </View>
     </ScrollView>
   );
 }
@@ -490,7 +576,7 @@ const styles = StyleSheet.create({
     width: "100%",
   },
 
-  /* ---------------- Wishlist (list view) ---------------- */
+  /* Wishlist */
 
   wishlistHeader: {
     flexDirection: "row",
@@ -518,7 +604,8 @@ const styles = StyleSheet.create({
     height: 22,
     paddingHorizontal: 6,
     borderRadius: radius.pill,
-    backgroundColor: "rgba(241, 115, 31, 0.10)",
+    backgroundColor:
+      "rgba(241, 115, 31, 0.10)",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -625,7 +712,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
 
-  /* Empty wishlist — quiet single-line prompt */
+  /* Empty wishlist */
 
   emptyWishlist: {
     flexDirection: "row",
@@ -646,5 +733,28 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     fontWeight: "600",
     fontSize: 13,
+  },
+
+  /* ================================================== */
+  /* CLEAR CACHE */
+  /* ================================================== */
+
+  clearCacheSection: {
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.xxl,
+    paddingBottom: spacing.xxl,
+  },
+
+  clearCacheTitle: {
+    ...typography.h3,
+    color: colors.textPrimary,
+    marginBottom: spacing.xs,
+  },
+
+  clearCacheDescription: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginBottom: spacing.md,
+    lineHeight: 18,
   },
 });

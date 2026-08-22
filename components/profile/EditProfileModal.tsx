@@ -1,13 +1,16 @@
 import { colors, radius, spacing, typography } from "@/constants/theme";
 import React, { useState } from "react";
 import {
-    ActivityIndicator,
-    Modal,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 
 type UserForm = {
@@ -49,61 +52,78 @@ export default function EditProfileModal({
       transparent
       onRequestClose={onClose}
     >
-      <View style={styles.overlay}>
+      <KeyboardAvoidingView
+        style={styles.overlay}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+      >
         <View style={styles.sheet}>
-          <Text style={styles.title}>Edit Profile</Text>
+          <View style={styles.header}>
+            <Text style={styles.title}>Edit Profile</Text>
+            <TouchableOpacity onPress={onClose} disabled={saving}>
+              <Text style={styles.closeText}>✕</Text>
+            </TouchableOpacity>
+          </View>
 
-          {/* First Name */}
-          <Text style={styles.label}>First Name</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Enter first name"
-            placeholderTextColor={colors.textSecondary}
-            value={form.firstName}
-            onChangeText={update("firstName")}
-          />
+          <ScrollView
+            style={styles.scrollArea}
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={true}
+            keyboardShouldPersistTaps="handled"
+          >
+            {/* First Name */}
+            <Text style={styles.label}>First Name</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Enter first name"
+              placeholderTextColor={colors.textSecondary}
+              value={form.firstName}
+              onChangeText={update("firstName")}
+            />
 
-          {/* Last Name */}
-          <Text style={styles.label}>Last Name</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Enter last name"
-            placeholderTextColor={colors.textSecondary}
-            value={form.lastName}
-            onChangeText={update("lastName")}
-          />
+            {/* Last Name */}
+            <Text style={styles.label}>Last Name</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Enter last name"
+              placeholderTextColor={colors.textSecondary}
+              value={form.lastName}
+              onChangeText={update("lastName")}
+            />
 
-          {/* Mobile Number */}
-          <Text style={styles.label}>Mobile Number</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Enter mobile number"
-            placeholderTextColor={colors.textSecondary}
-            value={form.mobileNo}
-            onChangeText={update("mobileNo")}
-            keyboardType="phone-pad"
-          />
+            {/* Mobile Number */}
+            <Text style={styles.label}>Mobile Number</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Enter mobile number"
+              placeholderTextColor={colors.textSecondary}
+              value={form.mobileNo}
+              onChangeText={update("mobileNo")}
+              keyboardType="phone-pad"
+            />
 
-          {/* Address */}
-          <Text style={styles.label}>Address</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Enter address"
-            placeholderTextColor={colors.textSecondary}
-            value={form.userAddress}
-            onChangeText={update("userAddress")}
-          />
+            {/* Address */}
+            <Text style={styles.label}>Address</Text>
+            <TextInput
+              style={[styles.input, styles.textArea]}
+              placeholder="Enter address"
+              placeholderTextColor={colors.textSecondary}
+              value={form.userAddress}
+              onChangeText={update("userAddress")}
+              multiline
+              numberOfLines={2}
+            />
 
-          {/* Email */}
-          <Text style={styles.label}>Email</Text>
-          <TextInput
-            style={[styles.input, styles.inputDisabled]}
-            placeholder="Email"
-            placeholderTextColor={colors.textSecondary}
-            value={form.email}
-            editable={false}
-            selectTextOnFocus={false}
-          />
+            {/* Email */}
+            <Text style={styles.label}>Email</Text>
+            <TextInput
+              style={[styles.input, styles.inputDisabled]}
+              placeholder="Email"
+              placeholderTextColor={colors.textSecondary}
+              value={form.email}
+              editable={false}
+              selectTextOnFocus={false}
+            />
+          </ScrollView>
 
           {/* Actions */}
           <View style={styles.actions}>
@@ -128,7 +148,7 @@ export default function EditProfileModal({
             </TouchableOpacity>
           </View>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -145,12 +165,33 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: radius.lg,
     borderTopRightRadius: radius.lg,
     padding: spacing.lg,
+    maxHeight: "90%",
+  },
+
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: spacing.md,
   },
 
   title: {
     ...typography.h3,
     color: colors.textPrimary,
-    marginBottom: spacing.md,
+  },
+
+  closeText: {
+    fontSize: 20,
+    color: colors.textSecondary,
+    padding: spacing.xs,
+  },
+
+  scrollArea: {
+    flexGrow: 0,
+  },
+
+  scrollContent: {
+    paddingBottom: spacing.md,
   },
 
   label: {
@@ -170,6 +211,11 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
   },
 
+  textArea: {
+    minHeight: 60,
+    textAlignVertical: "top",
+  },
+
   inputDisabled: {
     backgroundColor: colors.border + "40",
     color: colors.textSecondary,
@@ -179,6 +225,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: spacing.md,
     marginTop: spacing.md,
+    paddingTop: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
   },
 
   cancelBtn: {

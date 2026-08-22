@@ -107,10 +107,18 @@ async function apiGetRequest<T = any>(path: string, label: string): Promise<T> {
   }
 }
 
-export async function loginUser(email: string, password: string) {
+export async function loginUser(
+  email: string,
+  password: string,
+  regType: string = "Normal",
+) {
   return apiRequest(
     "/mob/MobUserLogin",
-    { Email: email, Password: password, RegType: "Normal" },
+    {
+      Email: email,
+      Password: password,
+      RegType: regType,
+    },
     "LOGIN",
   );
 }
@@ -136,6 +144,47 @@ export async function signupUser(payload: {
     "SIGNUP",
   );
 }
+
+export async function signupGoogleUser(payload: {
+  firstName: string;
+  lastName: string;
+  email: string;
+  googleId: string;
+}) {
+  console.log("====================================");
+  console.log("[API] GOOGLE SIGNUP REQUEST");
+  console.log("====================================");
+
+  console.log("[API] FirstName:", payload.firstName);
+  console.log("[API] LastName:", payload.lastName);
+  console.log("[API] Email:", payload.email);
+  console.log("[API] Google ID:", payload.googleId);
+  console.log("[API] RegType:", "Google");
+
+  const response = await apiRequest(
+    "/mob/InsertMobUser",
+    {
+      FirstName: payload.firstName,
+      LastName: payload.lastName,
+      Email: payload.email,
+      MobileNo: "",
+      Password: "",
+      UserType: "Customer",
+      RegType: "Google",
+      GoogleId: payload.googleId,
+    },
+    "GOOGLE_SIGNUP",
+  );
+
+  console.log("====================================");
+  console.log("[API] GOOGLE SIGNUP RESPONSE");
+  console.log("====================================");
+  console.log("[API] Response:", response);
+
+  return response;
+}
+
+// ... (rest of the API functions remain unchanged)
 
 export async function updateMobUser(payload: {
   mobUserID: number;

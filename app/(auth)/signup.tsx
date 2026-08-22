@@ -1,10 +1,9 @@
 import Button from "@/components/Button";
-import GoogleButton from "@/components/GoogleButton";
 import Input from "@/components/Input";
 import { colors, spacing, typography } from "@/constants/theme";
-import { useGoogleAuth } from "@/hooks/useGoogleAuth";
-import { signupUser } from "@/services/api";
-import { saveSession } from "@/services/authStorage";
+import {
+  signupUser,
+} from "@/services/api";
 import { router } from "expo-router";
 import React, { useState } from "react";
 import {
@@ -26,14 +25,7 @@ export default function SignupScreen() {
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-
   const [loading, setLoading] = useState(false);
-
-  /*
-   * ============================================================
-   * VALIDATION ERRORS
-   * ============================================================
-   */
 
   const [errors, setErrors] = useState({
     firstName: "",
@@ -49,20 +41,22 @@ export default function SignupScreen() {
    * REGEX
    * ============================================================
    */
-
-  const nameRegex = /^[A-Za-zÀ-ÿ]+(?:[ '-][A-Za-zÀ-ÿ]+)*$/;
-
-  const emailRegex = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
-
-  const phoneRegex = /^(?:03\d{9}|923\d{9}|\+923\d{9})$/;
+  const nameRegex =
+    /^[A-Za-zÀ-ÿ]+(?:[ '-][A-Za-zÀ-ÿ]+)*$/;
+  const emailRegex =
+    /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
+  const phoneRegex =
+    /^(?:03\d{9}|923\d{9}|\+923\d{9})$/;
 
   /*
    * ============================================================
-   * ERROR UPDATE HELPER
+   * ERROR HELPER
    * ============================================================
    */
-
-  const setFieldError = (field: keyof typeof errors, message: string) => {
+  const setFieldError = (
+    field: keyof typeof errors,
+    message: string,
+  ) => {
     setErrors((previous) => ({
       ...previous,
       [field]: message,
@@ -71,235 +65,97 @@ export default function SignupScreen() {
 
   /*
    * ============================================================
-   * FIRST NAME VALIDATION
+   * VALIDATION
    * ============================================================
    */
-
   const validateFirstName = (value: string) => {
     const cleanValue = value.trim();
-
-    if (!cleanValue) {
-      return "First name is required.";
-    }
-
-    if (cleanValue.length < 2) {
+    if (!cleanValue) return "First name is required.";
+    if (cleanValue.length < 2)
       return "First name must contain at least 2 characters.";
-    }
-
-    if (cleanValue.length > 30) {
+    if (cleanValue.length > 30)
       return "First name cannot be longer than 30 characters.";
-    }
-
-    if (!nameRegex.test(cleanValue)) {
+    if (!nameRegex.test(cleanValue))
       return "Only letters, spaces, apostrophes and hyphens are allowed.";
-    }
-
     return "";
   };
-
-  /*
-   * ============================================================
-   * LAST NAME VALIDATION
-   * ============================================================
-   */
 
   const validateLastName = (value: string) => {
     const cleanValue = value.trim();
-
-    if (!cleanValue) {
-      return "Last name is required.";
-    }
-
-    if (cleanValue.length < 2) {
+    if (!cleanValue) return "Last name is required.";
+    if (cleanValue.length < 2)
       return "Last name must contain at least 2 characters.";
-    }
-
-    if (cleanValue.length > 30) {
+    if (cleanValue.length > 30)
       return "Last name cannot be longer than 30 characters.";
-    }
-
-    if (!nameRegex.test(cleanValue)) {
+    if (!nameRegex.test(cleanValue))
       return "Only letters, spaces, apostrophes and hyphens are allowed.";
-    }
-
     return "";
   };
-
-  /*
-   * ============================================================
-   * EMAIL VALIDATION
-   * ============================================================
-   */
 
   const validateEmail = (value: string) => {
     const cleanValue = value.trim();
-
-    if (!cleanValue) {
-      return "Email address is required.";
-    }
-
-    if (cleanValue.length > 100) {
-      return "Email address is too long.";
-    }
-
-    if (!emailRegex.test(cleanValue)) {
+    if (!cleanValue) return "Email address is required.";
+    if (cleanValue.length > 100) return "Email address is too long.";
+    if (!emailRegex.test(cleanValue))
       return "Please enter a valid email address.";
-    }
-
     return "";
   };
-
-  /*
-   * ============================================================
-   * PHONE VALIDATION
-   * ============================================================
-   */
 
   const validatePhone = (value: string) => {
     const cleanValue = value.trim().replace(/\s+/g, "");
-
-    if (!cleanValue) {
-      return "Mobile number is required.";
-    }
-
-    if (!phoneRegex.test(cleanValue)) {
+    if (!cleanValue) return "Mobile number is required.";
+    if (!phoneRegex.test(cleanValue))
       return "Enter a valid Pakistani mobile number.";
-    }
-
     return "";
   };
-
-  /*
-   * ============================================================
-   * PASSWORD VALIDATION
-   * ============================================================
-   */
 
   const validatePassword = (value: string) => {
-    if (!value) {
-      return "Password is required.";
-    }
-
-    if (value.length < 8) {
-      return "Password must be at least 8 characters.";
-    }
-
-    if (value.length > 64) {
+    if (!value) return "Password is required.";
+    if (value.length < 8) return "Password must be at least 8 characters.";
+    if (value.length > 64)
       return "Password cannot be longer than 64 characters.";
-    }
-
-    if (!/[A-Z]/.test(value)) {
+    if (!/[A-Z]/.test(value))
       return "Password must contain an uppercase letter.";
-    }
-
-    if (!/[a-z]/.test(value)) {
+    if (!/[a-z]/.test(value))
       return "Password must contain a lowercase letter.";
-    }
+    if (!/[0-9]/.test(value)) return "Password must contain a number.";
+    return "";
+  };
 
-    if (!/[0-9]/.test(value)) {
-      return "Password must contain a number.";
-    }
-
+  const validateConfirmPassword = (
+    value: string,
+    currentPassword: string,
+  ) => {
+    if (!value) return "Please confirm your password.";
+    if (value !== currentPassword) return "Passwords do not match.";
     return "";
   };
 
   /*
    * ============================================================
-   * CONFIRM PASSWORD VALIDATION
+   * NORMAL SIGNUP
    * ============================================================
    */
-
-  const validateConfirmPassword = (value: string, currentPassword: string) => {
-    if (!value) {
-      return "Please confirm your password.";
-    }
-
-    if (value !== currentPassword) {
-      return "Passwords do not match.";
-    }
-
-    return "";
-  };
-
-  /*
-   * ============================================================
-   * GOOGLE SIGNUP
-   * ============================================================
-   */
-
-  const { promptGoogleLogin, loading: googleLoading } = useGoogleAuth({
-    onSuccess: async (user, accessToken) => {
-      try {
-        console.log("====================================");
-        console.log("[SIGNUP SCREEN] GOOGLE SIGNUP SUCCESS");
-        console.log("[SIGNUP SCREEN] Google User:", user);
-        console.log("====================================");
-
-        await saveSession(`google:${accessToken}`, {
-          ...user,
-          authProvider: "google",
-          googleId: user.id,
-          googleAccessToken: accessToken,
-        });
-
-        console.log("[SIGNUP SCREEN] Google session saved to AsyncStorage.");
-
-        router.replace("/(tabs)");
-      } catch (error: any) {
-        console.log("[SIGNUP SCREEN] Failed to save Google session:", error);
-
-        Alert.alert(
-          "Google Sign-Up Failed",
-          error?.message ?? "Unable to save your Google session.",
-        );
-      }
-    },
-
-    onError: (message) => {
-      console.log("====================================");
-      console.log("[SIGNUP SCREEN] GOOGLE SIGNUP FAILED");
-      console.log("[SIGNUP SCREEN] Error:", message);
-      console.log("====================================");
-
-      Alert.alert("Google Sign-Up Failed", message);
-    },
-  });
-
-  /*
-   * ============================================================
-   * HANDLE SIGNUP
-   * ============================================================
-   */
-
   const handleSignup = async () => {
-    const firstNameError = validateFirstName(firstName);
-    const lastNameError = validateLastName(lastName);
-    const emailError = validateEmail(email);
-    const phoneError = validatePhone(phone);
-    const passwordError = validatePassword(password);
-    const confirmPasswordError = validateConfirmPassword(
-      confirmPassword,
-      password,
-    );
-
     const validationErrors = {
-      firstName: firstNameError,
-      lastName: lastNameError,
-      email: emailError,
-      phone: phoneError,
-      password: passwordError,
-      confirmPassword: confirmPasswordError,
+      firstName: validateFirstName(firstName),
+      lastName: validateLastName(lastName),
+      email: validateEmail(email),
+      phone: validatePhone(phone),
+      password: validatePassword(password),
+      confirmPassword: validateConfirmPassword(
+        confirmPassword,
+        password,
+      ),
     };
 
     setErrors(validationErrors);
 
-    const hasErrors = Object.values(validationErrors).some(
-      (error) => error.length > 0,
-    );
+    const hasErrors = Object.values(
+      validationErrors,
+    ).some((error) => error.length > 0);
 
-    if (hasErrors) {
-      return;
-    }
+    if (hasErrors) return;
 
     const cleanFirstName = firstName.trim();
     const cleanLastName = lastName.trim();
@@ -309,13 +165,9 @@ export default function SignupScreen() {
     try {
       setLoading(true);
 
-      console.log("====================================");
-      console.log("[SIGNUP SCREEN] Starting signup...");
-      console.log("[SIGNUP SCREEN] First Name:", cleanFirstName);
-      console.log("[SIGNUP SCREEN] Last Name:", cleanLastName);
-      console.log("[SIGNUP SCREEN] Email:", cleanEmail);
-      console.log("[SIGNUP SCREEN] Phone:", cleanPhone);
-      console.log("====================================");
+      console.log(
+        "[SIGNUP SCREEN] Starting normal signup...",
+      );
 
       const response = await signupUser({
         firstName: cleanFirstName,
@@ -325,36 +177,121 @@ export default function SignupScreen() {
         password,
       });
 
-      console.log("====================================");
-      console.log("[SIGNUP SCREEN] Signup API response:", response);
-      console.log("====================================");
-
-      setLoading(false);
-
-      Alert.alert(
-        "Account Created",
-        "Your account has been created successfully. Please login to continue.",
-        [
-          {
-            text: "Login",
-            onPress: () => {
-              router.replace("/(auth)/login");
-            },
-          },
-        ],
+      console.log(
+        "[SIGNUP SCREEN] Signup response:",
+        response,
       );
-    } catch (error: any) {
-      console.log("====================================");
-      console.log("[SIGNUP SCREEN] Signup failed");
-      console.log("[SIGNUP SCREEN] Error:", error);
-      console.log("====================================");
 
-      setLoading(false);
+      /*
+       * ============================================================
+       * CHECK BACKEND RESPONSE
+       * ============================================================
+       */
+      const message = String(
+        response?.msg ?? "",
+      ).trim();
+
+      console.log(
+        "[SIGNUP SCREEN] Backend message:",
+        message,
+      );
+
+      const normalizedMessage =
+        message.toLowerCase();
+
+      const isSuccess =
+        normalizedMessage.includes(
+          "data saved successfully",
+        ) ||
+        normalizedMessage.includes(
+          "saved successfully",
+        ) ||
+        normalizedMessage.includes(
+          "user created successfully",
+        ) ||
+        normalizedMessage.includes(
+          "account created successfully",
+        ) ||
+        normalizedMessage.includes(
+          "registration successful",
+        ) ||
+        normalizedMessage.includes(
+          "registered successfully",
+        );
+
+      const isEmailExists =
+        normalizedMessage.includes(
+          "already exist",
+        ) ||
+        normalizedMessage.includes(
+          "already registered",
+        ) ||
+        normalizedMessage.includes(
+          "email exists",
+        );
+
+      if (isSuccess) {
+        console.log(
+          "[SIGNUP SCREEN] ✅ Account created successfully.",
+        );
+
+        Alert.alert(
+          "Account Created",
+          "Your account has been created successfully. Please login to continue.",
+          [
+            {
+              text: "Login",
+              onPress: () =>
+                router.replace("/(auth)/login"),
+            },
+          ],
+        );
+      } else if (isEmailExists) {
+        /*
+         * ============================================================
+         * EMAIL ALREADY EXISTS - Show error for normal signup
+         * ============================================================
+         */
+        console.warn(
+          "[SIGNUP SCREEN] Email already exists:",
+          message,
+        );
+
+        Alert.alert(
+          "Signup Failed",
+          message ||
+            "Email already exists. Please use a different email or login.",
+        );
+      } else {
+        /*
+         * ============================================================
+         * OTHER BACKEND ERROR
+         * ============================================================
+         */
+        console.warn(
+          "[SIGNUP SCREEN] Signup rejected by backend:",
+          message,
+        );
+
+        Alert.alert(
+          "Signup Failed",
+          message ||
+            "Unable to create your account. Please try again.",
+        );
+      }
+    } catch (error: any) {
+      console.error(
+        "[SIGNUP SCREEN] Signup failed:",
+        error,
+      );
 
       Alert.alert(
         "Signup Failed",
-        error?.message || "Unable to create your account. Please try again.",
+        error?.message ??
+          "Unable to create your account. Please try again.",
       );
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -363,7 +300,6 @@ export default function SignupScreen() {
    * RENDER
    * ============================================================
    */
-
   return (
     <ScrollView
       contentContainerStyle={styles.container}
@@ -371,7 +307,6 @@ export default function SignupScreen() {
       showsVerticalScrollIndicator={false}
     >
       <Text style={styles.title}>Create Account</Text>
-
       <Text style={styles.subtitle}>Let's get you started</Text>
 
       <Image
@@ -380,10 +315,6 @@ export default function SignupScreen() {
         }}
         style={styles.image}
       />
-
-      {/* ========================================================
-          NAME
-      ======================================================== */}
 
       <View style={styles.nameRow}>
         <View style={styles.nameInput}>
@@ -395,18 +326,24 @@ export default function SignupScreen() {
             value={firstName}
             onChangeText={(value) => {
               setFirstName(value);
-
               if (errors.firstName) {
-                setFieldError("firstName", validateFirstName(value));
+                setFieldError(
+                  "firstName",
+                  validateFirstName(value),
+                );
               }
             }}
-            onBlur={() => {
-              setFieldError("firstName", validateFirstName(firstName));
-            }}
+            onBlur={() =>
+              setFieldError(
+                "firstName",
+                validateFirstName(firstName),
+              )
+            }
           />
-
           {!!errors.firstName && (
-            <Text style={styles.errorText}>{errors.firstName}</Text>
+            <Text style={styles.errorText}>
+              {errors.firstName}
+            </Text>
           )}
         </View>
 
@@ -419,25 +356,27 @@ export default function SignupScreen() {
             value={lastName}
             onChangeText={(value) => {
               setLastName(value);
-
               if (errors.lastName) {
-                setFieldError("lastName", validateLastName(value));
+                setFieldError(
+                  "lastName",
+                  validateLastName(value),
+                );
               }
             }}
-            onBlur={() => {
-              setFieldError("lastName", validateLastName(lastName));
-            }}
+            onBlur={() =>
+              setFieldError(
+                "lastName",
+                validateLastName(lastName),
+              )
+            }
           />
-
           {!!errors.lastName && (
-            <Text style={styles.errorText}>{errors.lastName}</Text>
+            <Text style={styles.errorText}>
+              {errors.lastName}
+            </Text>
           )}
         </View>
       </View>
-
-      {/* ========================================================
-          EMAIL
-      ======================================================== */}
 
       <View style={styles.fieldContainer}>
         <Input
@@ -449,22 +388,26 @@ export default function SignupScreen() {
           value={email}
           onChangeText={(value) => {
             setEmail(value);
-
             if (errors.email) {
-              setFieldError("email", validateEmail(value));
+              setFieldError(
+                "email",
+                validateEmail(value),
+              );
             }
           }}
-          onBlur={() => {
-            setFieldError("email", validateEmail(email));
-          }}
+          onBlur={() =>
+            setFieldError(
+              "email",
+              validateEmail(email),
+            )
+          }
         />
-
-        {!!errors.email && <Text style={styles.errorText}>{errors.email}</Text>}
+        {!!errors.email && (
+          <Text style={styles.errorText}>
+            {errors.email}
+          </Text>
+        )}
       </View>
-
-      {/* ========================================================
-          PHONE
-      ======================================================== */}
 
       <View style={styles.fieldContainer}>
         <Input
@@ -474,22 +417,26 @@ export default function SignupScreen() {
           value={phone}
           onChangeText={(value) => {
             setPhone(value);
-
             if (errors.phone) {
-              setFieldError("phone", validatePhone(value));
+              setFieldError(
+                "phone",
+                validatePhone(value),
+              );
             }
           }}
-          onBlur={() => {
-            setFieldError("phone", validatePhone(phone));
-          }}
+          onBlur={() =>
+            setFieldError(
+              "phone",
+              validatePhone(phone),
+            )
+          }
         />
-
-        {!!errors.phone && <Text style={styles.errorText}>{errors.phone}</Text>}
+        {!!errors.phone && (
+          <Text style={styles.errorText}>
+            {errors.phone}
+          </Text>
+        )}
       </View>
-
-      {/* ========================================================
-          PASSWORD
-      ======================================================== */}
 
       <View style={styles.fieldContainer}>
         <Input
@@ -499,37 +446,40 @@ export default function SignupScreen() {
           value={password}
           onChangeText={(value) => {
             setPassword(value);
-
             if (errors.password) {
-              setFieldError("password", validatePassword(value));
+              setFieldError(
+                "password",
+                validatePassword(value),
+              );
             }
-
             if (confirmPassword) {
               setFieldError(
                 "confirmPassword",
-                validateConfirmPassword(confirmPassword, value),
+                validateConfirmPassword(
+                  confirmPassword,
+                  value,
+                ),
               );
             }
           }}
-          onBlur={() => {
-            setFieldError("password", validatePassword(password));
-          }}
+          onBlur={() =>
+            setFieldError(
+              "password",
+              validatePassword(password),
+            )
+          }
         />
-
         {!!errors.password && (
-          <Text style={styles.errorText}>{errors.password}</Text>
+          <Text style={styles.errorText}>
+            {errors.password}
+          </Text>
         )}
-
         {!errors.password && password.length === 0 && (
           <Text style={styles.passwordHint}>
             8+ characters, uppercase, lowercase and number
           </Text>
         )}
       </View>
-
-      {/* ========================================================
-          CONFIRM PASSWORD
-      ======================================================== */}
 
       <View style={styles.fieldContainer}>
         <Input
@@ -539,57 +489,46 @@ export default function SignupScreen() {
           value={confirmPassword}
           onChangeText={(value) => {
             setConfirmPassword(value);
-
             if (errors.confirmPassword) {
               setFieldError(
                 "confirmPassword",
-                validateConfirmPassword(value, password),
+                validateConfirmPassword(
+                  value,
+                  password,
+                ),
               );
             }
           }}
-          onBlur={() => {
+          onBlur={() =>
             setFieldError(
               "confirmPassword",
-              validateConfirmPassword(confirmPassword, password),
-            );
-          }}
+              validateConfirmPassword(
+                confirmPassword,
+                password,
+              ),
+            )
+          }
         />
-
         {!!errors.confirmPassword && (
-          <Text style={styles.errorText}>{errors.confirmPassword}</Text>
+          <Text style={styles.errorText}>
+            {errors.confirmPassword}
+          </Text>
         )}
       </View>
-
-      {/* ========================================================
-          SIGN UP BUTTON
-      ======================================================== */}
 
       <Button
         title="Sign Up"
         onPress={handleSignup}
         loading={loading}
-        style={{
-          marginTop: spacing.sm,
-        }}
+        style={{ marginTop: spacing.sm }}
       />
-
-      {/* ========================================================
-          GOOGLE
-      ======================================================== */}
-
-      <Text style={styles.orText}>Or Continue with</Text>
-
-      <View style={styles.googleContainer}>
-        <GoogleButton onPress={promptGoogleLogin} loading={googleLoading} />
-      </View>
-
-      {/* ========================================================
-          LOGIN
-      ======================================================== */}
 
       <Text style={styles.footerText}>
         Already have an account?{" "}
-        <Text style={styles.link} onPress={() => router.push("/(auth)/login")}>
+        <Text
+          style={styles.link}
+          onPress={() => router.push("/(auth)/login")}
+        >
           Login
         </Text>
       </Text>
@@ -597,6 +536,11 @@ export default function SignupScreen() {
   );
 }
 
+/*
+ * ============================================================
+ * STYLES
+ * ============================================================
+ */
 const styles = StyleSheet.create({
   container: {
     flexGrow: 1,
@@ -661,20 +605,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xs,
   },
 
-  orText: {
-    ...typography.caption,
-    color: colors.textSecondary,
-    marginVertical: spacing.md,
-  },
-
-  googleContainer: {
-    width: "100%",
-    marginBottom: spacing.lg,
-  },
-
   footerText: {
     ...typography.body,
     color: colors.textSecondary,
+    marginTop: spacing.lg,
   },
 
   link: {
