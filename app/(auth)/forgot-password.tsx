@@ -68,10 +68,8 @@ export default function ForgotPasswordScreen() {
 
       <Text style={styles.title}>Forgot Password?</Text>
 
-      <Image
-        source={{
-          uri: "https://images.unsplash.com/photo-1587668178277-295251f900ce?w=400",
-        }}
+    <Image
+      source={require('../../assets/images/logo.png')}
         style={styles.image}
       />
 
@@ -123,12 +121,12 @@ const styles = StyleSheet.create({
     width: "100%",
     textAlign: "center",
   },
-  image: {
-    width: width * 0.5,
-    height: width * 0.5,
-    borderRadius: 999,
-    marginBottom: spacing.lg,
-  },
+ image: {
+  width: width * 0.75,
+  height: width * 0.5,
+  marginBottom: spacing.lg,
+  resizeMode: 'contain',
+},
   description: {
     ...typography.body,
     color: colors.textSecondary,

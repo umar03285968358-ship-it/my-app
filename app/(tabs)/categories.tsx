@@ -1,3 +1,4 @@
+import KeyboardScreen from "@/components/KeyboardScreen";
 import SearchBar from "@/components/Searchbar";
 import { colors, radius, spacing, typography } from "@/constants/theme";
 import { useHeaderSearch } from "@/context/HeaderSearchContext";
@@ -109,120 +110,122 @@ export default function CategoriesScreen() {
   }, [mainCategories, search]);
 
   return (
-    <View style={styles.container}>
-      {/* Search */}
-      <View style={styles.searchContainer}>
-        <SearchBar
-          value={search}
-          onChangeText={setSearch}
-          showDivider={true}
-          placeholder="Search categories..."
-          isOpen={isSearchOpen}
-          onClose={closeSearch}
-        />
-      </View>
-
-      {loading ? (
-        <View style={styles.centerState}>
-          <ActivityIndicator color={colors.textPrimary} />
-        </View>
-      ) : error ? (
-        <View style={styles.centerState}>
-          <Ionicons
-            name="cloud-offline-outline"
-            size={32}
-            color={colors.textSecondary}
+    <KeyboardScreen>
+      <View style={styles.container}>
+        {/* Search */}
+        <View style={styles.searchContainer}>
+          <SearchBar
+            value={search}
+            onChangeText={setSearch}
+            showDivider={true}
+            placeholder="Search categories..."
+            isOpen={isSearchOpen}
+            onClose={closeSearch}
           />
-
-          <Text style={styles.errorText}>{error}</Text>
-
-          <TouchableOpacity
-            style={styles.retryButton}
-            onPress={() => refetch()}
-          >
-            <Text style={styles.retryText}>Try again</Text>
-          </TouchableOpacity>
         </View>
-      ) : mainCategories.length === 0 ? (
-        <View style={styles.centerState}>
-          <Ionicons
-            name="file-tray-outline"
-            size={32}
-            color={colors.textSecondary}
-          />
 
-          <Text style={styles.errorText}>No categories available yet.</Text>
-        </View>
-      ) : visibleCategories.length === 0 ? (
-        <View style={styles.centerState}>
-          <Ionicons
-            name="search-outline"
-            size={32}
-            color={colors.textSecondary}
-          />
-
-          <Text style={styles.errorText}>
-            No categories match &quot;{search}&quot;
-          </Text>
-        </View>
-      ) : (
-        <FlatList
-          data={visibleCategories}
-          keyExtractor={(item) => String(item.id)}
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={() => refetch()}
+        {loading ? (
+          <View style={styles.centerState}>
+            <ActivityIndicator color={colors.textPrimary} />
+          </View>
+        ) : error ? (
+          <View style={styles.centerState}>
+            <Ionicons
+              name="cloud-offline-outline"
+              size={32}
+              color={colors.textSecondary}
             />
-          }
-          contentContainerStyle={styles.listContent}
-          renderItem={({ item }) => (
+
+            <Text style={styles.errorText}>{error}</Text>
+
             <TouchableOpacity
-              style={styles.row}
-              activeOpacity={0.7}
-              onPress={() =>
-                router.push({
-                  pathname: "/category/[id]",
-                  params: {
-                    id: String(item.id),
-                  },
-                })
-              }
+              style={styles.retryButton}
+              onPress={() => refetch()}
             >
-              {/* Category Image */}
-              <View style={styles.iconCircle}>
-                {item.image ? (
-                  <Image
-                    source={{ uri: item.image }}
-                    style={styles.iconImage}
-                    resizeMode="cover"
-                  />
-                ) : (
-                  <Text style={styles.iconFallback}>
-                    {item.name?.charAt(0)?.toUpperCase() ?? "?"}
-                  </Text>
-                )}
-              </View>
-
-              {/* Category Name */}
-              <View style={styles.nameContainer}>
-                <Text style={styles.name} numberOfLines={1}>
-                  {item.name}
-                </Text>
-              </View>
-
-              {/* Arrow */}
-              <Ionicons
-                name="chevron-forward"
-                size={20}
-                color={colors.textSecondary}
-              />
+              <Text style={styles.retryText}>Try again</Text>
             </TouchableOpacity>
-          )}
-        />
-      )}
-    </View>
+          </View>
+        ) : mainCategories.length === 0 ? (
+          <View style={styles.centerState}>
+            <Ionicons
+              name="file-tray-outline"
+              size={32}
+              color={colors.textSecondary}
+            />
+
+            <Text style={styles.errorText}>No categories available yet.</Text>
+          </View>
+        ) : visibleCategories.length === 0 ? (
+          <View style={styles.centerState}>
+            <Ionicons
+              name="search-outline"
+              size={32}
+              color={colors.textSecondary}
+            />
+
+            <Text style={styles.errorText}>
+              No categories match &quot;{search}&quot;
+            </Text>
+          </View>
+        ) : (
+          <FlatList
+            data={visibleCategories}
+            keyExtractor={(item) => String(item.id)}
+            showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={() => refetch()}
+              />
+            }
+            contentContainerStyle={styles.listContent}
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                style={styles.row}
+                activeOpacity={0.7}
+                onPress={() =>
+                  router.push({
+                    pathname: "/category/[id]",
+                    params: {
+                      id: String(item.id),
+                    },
+                  })
+                }
+              >
+                {/* Category Image */}
+                <View style={styles.iconCircle}>
+                  {item.image ? (
+                    <Image
+                      source={{ uri: item.image }}
+                      style={styles.iconImage}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <Text style={styles.iconFallback}>
+                      {item.name?.charAt(0)?.toUpperCase() ?? "?"}
+                    </Text>
+                  )}
+                </View>
+
+                {/* Category Name */}
+                <View style={styles.nameContainer}>
+                  <Text style={styles.name} numberOfLines={1}>
+                    {item.name}
+                  </Text>
+                </View>
+
+                {/* Arrow */}
+                <Ionicons
+                  name="chevron-forward"
+                  size={20}
+                  color={colors.textSecondary}
+                />
+              </TouchableOpacity>
+            )}
+          />
+        )}
+      </View>
+    </KeyboardScreen>
   );
 }
 
@@ -252,13 +255,13 @@ const styles = StyleSheet.create({
    * Because this padding belongs to the FlatList,
    * it scrolls away together with the content.
    *
-   * After scrolling, category rows move underneath
-   * the SearchBar exactly like Wishlist.
+   * Extra bottom space ensures the final category card
+   * can be completely scrolled above the bottom area.
    */
   listContent: {
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.sm,
-    paddingBottom: spacing.xxl,
+    paddingBottom: spacing.xxl + 40,
   },
 
   centerState: {

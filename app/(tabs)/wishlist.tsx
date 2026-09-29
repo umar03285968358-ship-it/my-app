@@ -1,4 +1,4 @@
-import Header from "@/components/Header";
+import KeyboardScreen from "@/components/KeyboardScreen";
 import SearchBar from "@/components/Searchbar";
 import { colors, radius, spacing, typography } from "@/constants/theme";
 import { useCart } from "@/context/CartContext";
@@ -20,12 +20,12 @@ import {
   View,
 } from "react-native";
 
-// Unique, stable id for this screen's search registration — must not
-// collide with the ids used by the other 4 screens.
 const SEARCH_OWNER_ID = "wishlist";
 
 export default function WishlistScreen() {
-  const { wishlistProducts, loading, toggleWishlist } = useWishlist();
+  const { wishlistProducts, loading, toggleWishlist, clearWishlist } =
+    useWishlist();
+
   const { addToCart } = useCart();
 
   const { categories } = useMobCategories();
@@ -38,84 +38,32 @@ export default function WishlistScreen() {
   const visibleProducts = useMemo(() => {
     const q = search.trim().toLowerCase();
 
-    if (!q) return wishlistProducts;
+    if (!q) {
+      return wishlistProducts;
+    }
 
-    return wishlistProducts.filter((p) =>
-      p.productTitle.toLowerCase().includes(q),
+    return wishlistProducts.filter((product) =>
+      product.productTitle?.toLowerCase().includes(q),
     );
   }, [wishlistProducts, search]);
 
-  /*
-   * ---------------------------------------------------------
-   * REGISTER SEARCH WITH HEADER
-   * ---------------------------------------------------------
-   *
-   * Once this screen has content worth searching (i.e. the
-   * wishlist isn't empty/loading), tell the header a search
-   * bar exists on this screen. When collapsed, the header
-   * will show a search icon that reopens it.
-   *
-   * This must react to TWO things:
-   * - focus/blur (via useIsFocused) — tab screens can stay
-   *   mounted in the background, so we register while focused
-   *   and unregister the instant we lose focus, otherwise the
-   *   search bar's open/closed state leaks between screens.
-   * - the "has content" condition changing WHILE we're still
-   *   focused (e.g. loading finishes after the screen is
-   *   already focused). A plain useFocusEffect only re-runs on
-   *   focus/blur transitions, NOT when its dependencies change
-   *   while already focused — so if data loads a moment after
-   *   the screen gains focus, registerSearch() would never
-   *   fire and the header search icon would silently never
-   *   appear. A regular useEffect keyed on isFocused avoids
-   *   that trap.
-   *
-   * Registering always resets the search to collapsed, so
-   * returning to this screen (a fresh focus) always shows it
-   * hidden again.
-   *
-   * registerSearch/unregisterSearch now take this screen's owner
-   * id so the context can track a registry (Set) of currently-
-   * registered screens instead of one shared boolean — this
-   * prevents another screen's unregister (e.g. the screen you're
-   * navigating away from) from clobbering this screen's
-   * registration if the two effects fire in overlapping renders
-   * during a tab switch.
-   */
   const isFocused = useIsFocused();
+
   const screenHasSearch = !loading && wishlistProducts.length > 0;
 
   useEffect(() => {
-    console.log("[WISHLIST SEARCH REG]", {
-      isFocused,
-      loading,
-      count: wishlistProducts.length,
-      screenHasSearch,
-      willRegister: isFocused && screenHasSearch,
-    });
-
     if (isFocused && screenHasSearch) {
-      console.log(
-        "[WISHLIST SEARCH REG] -> registerSearch(",
-        SEARCH_OWNER_ID,
-        ")",
-      );
       registerSearch(SEARCH_OWNER_ID);
     } else {
-      console.log(
-        "[WISHLIST SEARCH REG] -> unregisterSearch(",
-        SEARCH_OWNER_ID,
-        ")",
-      );
       unregisterSearch(SEARCH_OWNER_ID);
     }
+
+    return () => {
+      unregisterSearch(SEARCH_OWNER_ID);
+    };
   }, [isFocused, screenHasSearch, registerSearch, unregisterSearch]);
 
-  // Whenever the search bar collapses (X button, header icon on
-  // another screen, navigating away, etc.), clear any active filter
-  // so a stale query never silently stays applied.
   useEffect(() => {
-    console.log("[WISHLIST SEARCH REG] isSearchOpen changed ->", isSearchOpen);
     if (!isSearchOpen) {
       setSearch("");
     }
@@ -123,17 +71,6 @@ export default function WishlistScreen() {
 
   /*
    * Open Product Details
-   *
-   * Wishlist products contain:
-   * - categoryTitle
-   * - subCategoryTitle
-   *
-   * ProductDetailScreen requires:
-   * - id
-   * - catId
-   * - subCatId
-   *
-   * We use the categories hook to resolve those IDs.
    */
   const handleProductPress = (product: (typeof wishlistProducts)[number]) => {
     const productSubCategoryName = product.subCategoryTitle
@@ -142,15 +79,6 @@ export default function WishlistScreen() {
 
     const productCategoryName = product.categoryTitle?.trim().toLowerCase();
 
-    /*
-     * Find the matching subcategory.
-     *
-     * MobCategory:
-     * - id = subcategory ID
-     * - name = subcategory name
-     * - type = "SubCat"
-     * - parentId = parent category ID
-     */
     const subcategory = categories.find(
       (category) =>
         category.type === "SubCat" &&
@@ -171,12 +99,6 @@ export default function WishlistScreen() {
     const subCatId = subcategory.id;
     const catId = subcategory.parentId;
 
-    /*
-     * Extra safety:
-     *
-     * Make sure the resolved parent category actually
-     * matches the product's category title.
-     */
     const parentCategory = categories.find(
       (category) =>
         category.type === "Cat" &&
@@ -199,9 +121,6 @@ export default function WishlistScreen() {
       return;
     }
 
-    /*
-     * Navigate exactly like SubcategoryProductsScreen.
-     */
     router.push({
       pathname: "/product/[id]",
       params: {
@@ -212,68 +131,103 @@ export default function WishlistScreen() {
     });
   };
 
+  /*
+   * Clear complete wishlist
+   */
+  const handleClearAll = async () => {
+    if (wishlistProducts.length === 0) {
+      return;
+    }
+
+    await clearWishlist();
+  };
+
+  /*
+   * Loading
+   */
   if (loading) {
     return (
       <View style={styles.container}>
-        <Header title="My Wishlist" />
-
         <View style={styles.centerState}>
-          <ActivityIndicator color={colors.textPrimary} />
+          <ActivityIndicator color={colors.primaryDark} />
         </View>
       </View>
     );
   }
 
+  /*
+   * Empty Wishlist
+   */
   if (wishlistProducts.length === 0) {
     return (
-      <View style={styles.container}>
-        <Header title="My Wishlist" />
+      <KeyboardScreen>
+        <View style={styles.container}>
+          {/* <Header title="My Wishlist" /> */}
 
-        <View style={styles.centerState}>
-          <Ionicons
-            name="heart-outline"
-            size={48}
-            color={colors.textSecondary}
-          />
+          <View style={styles.centerState}>
+            <Ionicons
+              name="heart-outline"
+              size={48}
+              color={colors.textSecondary}
+            />
 
-          <Text style={styles.emptyTitle}>Your wishlist is empty</Text>
+            <Text style={styles.emptyTitle}>Your wishlist is empty</Text>
 
-          <Text style={styles.emptySubtitle}>
-            Save products you love and they will appear here.
-          </Text>
+            <Text style={styles.emptySubtitle}>
+              Save products you love and they will appear here.
+            </Text>
 
-          <TouchableOpacity
-            style={styles.browseButton}
-            onPress={() => router.push("/(tabs)/categories")}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.browseButtonText}>Browse Products</Text>
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.browseButton}
+              onPress={() => router.push("/(tabs)/categories")}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.browseButtonText}>Browse Products</Text>
+            </TouchableOpacity>
+          </View>
         </View>
-      </View>
+      </KeyboardScreen>
     );
   }
 
+  /*
+   * Add visible/all products to cart
+   */
   const handleAddAll = () => {
-    visibleProducts.forEach((p) => addToCart(p, 1));
+    visibleProducts.forEach((product) => {
+      addToCart(product, 1);
+    });
 
     router.push("/(tabs)/cart");
   };
 
   return (
     <View style={styles.container}>
-      {/* Search */}
-      <View style={styles.searchContainer}>
-        <SearchBar
-          value={search}
-          onChangeText={setSearch}
-          showDivider={true}
-          placeholder="Search wishlist..."
-          isOpen={isSearchOpen}
-          onClose={closeSearch}
-        />
+      {/* Search + Clear All */}
+      <View style={styles.topSection}>
+        <View style={styles.searchContainer}>
+          <SearchBar
+            value={search}
+            onChangeText={setSearch}
+            showDivider={true}
+            placeholder="Search wishlist..."
+            isOpen={isSearchOpen}
+            onClose={closeSearch}
+          />
+        </View>
+
+        <TouchableOpacity
+          style={styles.clearAllButton}
+          onPress={handleClearAll}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="trash-outline" size={16} color={colors.primaryDark} />
+
+          <Text style={styles.clearAllText}>Clear All</Text>
+        </TouchableOpacity>
       </View>
 
+      {/* Product List */}
       {visibleProducts.length === 0 ? (
         <View style={styles.centerState}>
           <Ionicons
@@ -301,7 +255,9 @@ export default function WishlistScreen() {
               {/* Product Image */}
               {item.imagesPath ? (
                 <Image
-                  source={{ uri: item.imagesPath }}
+                  source={{
+                    uri: item.imagesPath,
+                  }}
                   style={styles.image}
                   resizeMode="cover"
                 />
@@ -317,14 +273,18 @@ export default function WishlistScreen() {
 
               {/* Product Information */}
               <View style={styles.productInfo}>
-                <Text style={styles.name} numberOfLines={2}>
+                <Text
+                  style={styles.name}
+                  numberOfLines={2}
+                  ellipsizeMode="tail"
+                >
                   {item.productTitle}
                 </Text>
 
                 <Text style={styles.price}>{formatRs(item.salePrice)}</Text>
               </View>
 
-              {/* Remove From Wishlist */}
+              {/* Wishlist Toggle */}
               <TouchableOpacity
                 onPress={(event) => {
                   event.stopPropagation();
@@ -332,15 +292,16 @@ export default function WishlistScreen() {
                 }}
                 hitSlop={8}
                 style={styles.heartButton}
+                activeOpacity={0.7}
               >
-                <Ionicons name="heart" size={20} color="#e0533d" />
+                <Ionicons name="heart" size={20} color={colors.primaryDark} />
               </TouchableOpacity>
             </TouchableOpacity>
           )}
         />
       )}
 
-      {/* Bottom Add All Button */}
+      {/* Add All */}
       {visibleProducts.length > 0 && (
         <View style={styles.footer}>
           <TouchableOpacity
@@ -401,25 +362,37 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
 
-  /*
-   * 12px space from the top.
-   * No marginBottom so the content can move
-   * directly underneath the SearchBar.
-   */
-  searchContainer: {
-    marginTop: 12,
+  topSection: {
     backgroundColor: colors.background,
     zIndex: 10,
   },
 
-  /*
-   * Initial small gap below SearchBar.
-   * This belongs to the FlatList, so it scrolls away.
-   */
+  searchContainer: {
+    marginTop: 12,
+  },
+
+  clearAllButton: {
+    alignSelf: "flex-end",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    marginRight: spacing.lg,
+    marginTop: spacing.xs,
+    marginBottom: spacing.xs,
+    paddingVertical: 5,
+    paddingHorizontal: 8,
+  },
+
+  clearAllText: {
+    ...typography.caption,
+    color: colors.primaryDark,
+    fontWeight: "700",
+  },
+
   listContent: {
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.sm,
-    paddingBottom: 100,
+    paddingBottom: 260,
   },
 
   row: {
@@ -486,8 +459,18 @@ const styles = StyleSheet.create({
   addAllButton: {
     backgroundColor: colors.textPrimary,
     borderRadius: radius.pill,
-    paddingVertical: spacing.md,
+    paddingVertical: spacing.md + 2,
     alignItems: "center",
+
+    // Subtle depth
+    shadowColor: colors.textPrimary,
+    shadowOffset: {
+      width: 0,
+      height: 3,
+    },
+    shadowOpacity: 0.18,
+    shadowRadius: 5,
+    elevation: 3,
   },
 
   addAllText: {

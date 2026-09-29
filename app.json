@@ -4,13 +4,9 @@
     "slug": "logixSolutionz",
     "version": "1.0.0",
     "orientation": "portrait",
-
     "icon": "./assets/images/icon.png",
-
     "scheme": "com.umarabdullah123.logixsolutionz",
-
     "userInterfaceStyle": "automatic",
-
     "newArchEnabled": true,
 
     "ios": {
@@ -25,14 +21,17 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-
       "edgeToEdgeEnabled": true,
-
       "predictiveBackGestureEnabled": false,
-
       "package": "com.umarabdullah123.logixsolutionz",
-
-      "usesCleartextTraffic": true
+      "softwareKeyboardLayoutMode": "resize",
+      "allowBackup": false,
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.SYSTEM_ALERT_WINDOW"
+      ]
     },
 
     "web": {
@@ -41,6 +40,13 @@
     },
 
     "plugins": [
+      [
+        "onesignal-expo-plugin",
+        {
+          "mode": "production"
+        }
+      ],
+
       "expo-router",
 
       [
@@ -67,11 +73,15 @@
         {
           "android": {
             "ndkVersion": "27.1.12297006",
-            "package": "com.umarabdullah123.logixsolutionz",
-            "usesCleartextTraffic": true
+            "usesCleartextTraffic": false
           }
         }
-      ]
+      ],
+
+      "expo-secure-store",
+
+      "./plugins/withTelQueries",
+      "./plugins/withRemoveOneSignalBootReceiver"
     ],
 
     "experiments": {
@@ -81,7 +91,6 @@
 
     "extra": {
       "router": {},
-
       "eas": {
         "projectId": "d69c5e64-a632-47e5-a7b9-99d1f156684d"
       }

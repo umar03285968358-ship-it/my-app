@@ -1,4 +1,5 @@
 import Button from "@/components/Button";
+import KeyboardScreen from "@/components/KeyboardScreen";
 import SearchBar from "@/components/Searchbar";
 import { colors, radius, spacing, typography } from "@/constants/theme";
 import { CartItem, useCart } from "@/context/CartContext";
@@ -6,9 +7,11 @@ import { useHeaderSearch } from "@/context/HeaderSearchContext";
 import { getDiscountedPrice, getProductImageUrl } from "@/utils/pricing";
 import { Ionicons } from "@expo/vector-icons";
 import { useIsFocused } from "@react-navigation/native";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
 import {
+  Alert,
+  BackHandler,
   FlatList,
   Image,
   StyleSheet,
@@ -27,6 +30,7 @@ export default function CartScreen() {
     loading,
     updateQty,
     removeFromCart,
+    clearCart,
     subtotal,
     deliveryFee,
     total,
@@ -37,35 +41,79 @@ export default function CartScreen() {
   const { isSearchOpen, registerSearch, unregisterSearch, closeSearch } =
     useHeaderSearch();
 
-  // Register this screen's search with the header whenever there's
-  // content worth searching.
-  //
-  // This must react to TWO things: focus/blur (via useIsFocused,
-  // since tab screens can stay mounted in the background and we
-  // need to unregister the instant we lose focus) AND the "has
-  // content" condition changing WHILE still focused (e.g. loading
-  // finishes after the screen already gained focus). A plain
-  // useFocusEffect only re-runs on focus/blur transitions, not on
-  // dependency changes while already focused — so if data loads a
-  // moment after focus, registerSearch() would never fire and the
-  // header search icon would silently never appear. A regular
-  // useEffect keyed on isFocused avoids that trap.
-  //
-  // Registering always resets the search to collapsed, so
-  // returning to this screen (a fresh focus) always shows it
-  // hidden again.
-  //
-  // registerSearch/unregisterSearch now take this screen's owner id
-  // so the context can track a registry (Set) of currently-registered
-  // screens instead of one shared boolean — this prevents another
-  // screen's unregister (e.g. the screen you're navigating away from)
-  // from clobbering this screen's registration if the two effects
-  // fire in overlapping renders during a tab switch.
-  //
-  // NOTE: this effect must run unconditionally (before the early
-  // returns below) to respect the Rules of Hooks — the loading/empty
-  // checks live inside the effect body instead.
+  /*
+   * ---------------------------------------------------------
+   * RETURN ROUTE
+   *
+   * CustomerHeader sends the pathname of the screen that opened
+   * the Cart.
+   *
+   * Examples:
+   *
+   * /products -> Cart -> /products
+   * /categories -> Cart -> /categories
+   * / -> Cart -> /
+   * /product/123 -> Cart -> /product/123
+   *
+   * If Cart was opened directly from the Cart tab, returnTo is
+   * undefined and normal back behavior remains unchanged.
+   * ---------------------------------------------------------
+   */
+  const { returnTo } = useLocalSearchParams<{
+    returnTo?: string;
+  }>();
+
+  const handleCartBack = () => {
+    if (returnTo) {
+      router.replace(
+        returnTo as Parameters<typeof router.replace>[0],
+      );
+      return;
+    }
+
+    if (router.canGoBack()) {
+      router.back();
+    }
+  };
+
+  /*
+   * ---------------------------------------------------------
+   * ANDROID BACK BUTTON
+   *
+   * If Cart was opened from another screen using the Customer
+   * Header, return to that exact screen.
+   *
+   * Otherwise let the normal navigation stack handle it.
+   * ---------------------------------------------------------
+   */
   const isFocused = useIsFocused();
+
+  useEffect(() => {
+    if (!isFocused) return;
+
+    const handleBackPress = () => {
+      if (returnTo) {
+        handleCartBack();
+        return true;
+      }
+
+      return false;
+    };
+
+    const subscription = BackHandler.addEventListener(
+      "hardwareBackPress",
+      handleBackPress,
+    );
+
+    return () => {
+      subscription.remove();
+    };
+  }, [isFocused, returnTo]);
+
+  /*
+   * Register this screen's search with the header whenever there's
+   * content worth searching.
+   */
   const screenHasSearch = !loading && items.length > 0;
 
   useEffect(() => {
@@ -78,7 +126,12 @@ export default function CartScreen() {
     });
 
     if (isFocused && screenHasSearch) {
-      console.log("[CART SEARCH REG] -> registerSearch(", SEARCH_OWNER_ID, ")");
+      console.log(
+        "[CART SEARCH REG] -> registerSearch(",
+        SEARCH_OWNER_ID,
+        ")",
+      );
+
       registerSearch(SEARCH_OWNER_ID);
     } else {
       console.log(
@@ -86,15 +139,17 @@ export default function CartScreen() {
         SEARCH_OWNER_ID,
         ")",
       );
+
       unregisterSearch(SEARCH_OWNER_ID);
     }
   }, [isFocused, screenHasSearch, registerSearch, unregisterSearch]);
 
-  // Whenever the search bar collapses (X button, header icon on
-  // another screen, navigating away, etc.), clear any active filter
-  // so a stale query never silently stays applied.
   useEffect(() => {
-    console.log("[CART SEARCH REG] isSearchOpen changed ->", isSearchOpen);
+    console.log(
+      "[CART SEARCH REG] isSearchOpen changed ->",
+      isSearchOpen,
+    );
+
     if (!isSearchOpen) {
       setSearch("");
     }
@@ -110,34 +165,75 @@ export default function CartScreen() {
     );
   }, [items, search]);
 
+  const handleClearCart = () => {
+    Alert.alert(
+      "Clear Cart",
+      "Are you sure you want to remove all items from your cart?",
+      [
+        {
+          text: "Cancel",
+          style: "cancel",
+        },
+        {
+          text: "Clear Cart",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await clearCart();
+            } catch (error) {
+              console.log(
+                "[CART] Failed to clear cart:",
+                error,
+              );
+            }
+          },
+        },
+      ],
+    );
+  };
+
   if (loading) {
     return <View style={styles.emptyContainer} />;
   }
 
   if (items.length === 0) {
     return (
-      <View style={styles.emptyContainer}>
-        <Ionicons name="cart-outline" size={56} color={colors.textSecondary} />
+      <KeyboardScreen>
+        <View style={styles.emptyContainer}>
+          <Ionicons
+            name="cart-outline"
+            size={56}
+            color={colors.textSecondary}
+          />
 
-        <Text style={styles.emptyTitle}>Your cart is empty</Text>
+          <Text style={styles.emptyTitle}>
+            Your cart is empty
+          </Text>
 
-        <Text style={styles.emptySubtitle}>
-          Add some delicious treats to get started.
-        </Text>
+          <Text style={styles.emptySubtitle}>
+            Add some delicious treats to get started.
+          </Text>
 
-        <Button
-          title="Browse Categories"
-          onPress={() => router.push("/(tabs)/categories")}
-          style={{
-            marginTop: spacing.lg,
-            width: 200,
-          }}
-        />
-      </View>
+          <Button
+            title="Browse Categories"
+            onPress={() =>
+              router.push("/(tabs)/categories")
+            }
+            style={{
+              marginTop: spacing.lg,
+              width: 200,
+            }}
+          />
+        </View>
+      </KeyboardScreen>
     );
   }
 
-  const renderItem = ({ item }: { item: CartItem }) => {
+  const renderItem = ({
+    item,
+  }: {
+    item: CartItem;
+  }) => {
     const price = getDiscountedPrice(item.product);
 
     return (
@@ -150,42 +246,74 @@ export default function CartScreen() {
         />
 
         <View style={styles.itemContent}>
-          <Text style={styles.itemName} numberOfLines={1} ellipsizeMode="tail">
+          <Text
+            style={styles.itemName}
+            numberOfLines={1}
+            ellipsizeMode="tail"
+          >
             {item.product.productTitle}
           </Text>
 
-          <Text style={styles.itemMeta}>{item.product.uomTitle ?? "1pc"}</Text>
+          <Text style={styles.itemMeta}>
+            {item.product.uomTitle ?? "1pc"}
+          </Text>
 
           <View style={styles.priceActionRow}>
-            <Text style={styles.itemPrice}>Rs {price.toFixed(0)}</Text>
+            <Text style={styles.itemPrice}>
+              Rs {price.toFixed(0)}
+            </Text>
 
             <View style={styles.qtyControl}>
               <TouchableOpacity
                 style={styles.qtyBtn}
                 onPress={() =>
-                  updateQty(item.product.productID, item.quantity - 1)
+                  updateQty(
+                    item.product.productID,
+                    item.quantity - 1,
+                  )
                 }
               >
-                <Ionicons name="remove" size={16} color={colors.textPrimary} />
+                <Ionicons
+                  name="remove"
+                  size={16}
+                  color={colors.textPrimary}
+                />
               </TouchableOpacity>
 
-              <Text style={styles.qtyText}>{item.quantity}</Text>
+              <Text style={styles.qtyText}>
+                {item.quantity}
+              </Text>
 
               <TouchableOpacity
                 style={styles.qtyBtn}
                 onPress={() =>
-                  updateQty(item.product.productID, item.quantity + 1)
+                  updateQty(
+                    item.product.productID,
+                    item.quantity + 1,
+                  )
                 }
               >
-                <Ionicons name="add" size={16} color={colors.textPrimary} />
+                <Ionicons
+                  name="add"
+                  size={16}
+                  color={colors.textPrimary}
+                />
               </TouchableOpacity>
             </View>
 
             <TouchableOpacity
-              onPress={() => removeFromCart(item.product.productID)}
+              onPress={() =>
+                removeFromCart(
+                  item.product.productID,
+                )
+              }
               style={styles.deleteButton}
             >
-              <Ionicons name="trash-outline" size={18} color={colors.danger} />
+              <Ionicons
+                name="trash-outline"
+                size={18}
+                color={colors.danger}
+              />
             </TouchableOpacity>
           </View>
         </View>
@@ -207,6 +335,25 @@ export default function CartScreen() {
         />
       </View>
 
+      {/* Clear Cart Button */}
+      <View style={styles.clearCartContainer}>
+        <TouchableOpacity
+          style={styles.clearCartButton}
+          activeOpacity={0.7}
+          onPress={handleClearCart}
+        >
+          <Ionicons
+            name="trash-outline"
+            size={16}
+            color={colors.danger}
+          />
+
+          <Text style={styles.clearCartText}>
+            Clear Cart
+          </Text>
+        </TouchableOpacity>
+      </View>
+
       {/* Scrollable Cart Content */}
       {visibleItems.length === 0 ? (
         <View style={styles.noResults}>
@@ -223,7 +370,9 @@ export default function CartScreen() {
       ) : (
         <FlatList
           data={visibleItems}
-          keyExtractor={(item) => String(item.product.productID)}
+          keyExtractor={(item) =>
+            String(item.product.productID)
+          }
           renderItem={renderItem}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.listContent}
@@ -233,15 +382,23 @@ export default function CartScreen() {
       {/* Bottom Summary */}
       <View style={styles.summary}>
         <View style={styles.summaryRow}>
-          <Text style={styles.summaryLabel}>Subtotal</Text>
+          <Text style={styles.summaryLabel}>
+            Subtotal
+          </Text>
 
-          <Text style={styles.summaryValue}>Rs {subtotal.toFixed(0)}</Text>
+          <Text style={styles.summaryValue}>
+            Rs {subtotal.toFixed(0)}
+          </Text>
         </View>
 
         <View style={styles.summaryRow}>
-          <Text style={styles.summaryLabel}>Delivery Fee</Text>
+          <Text style={styles.summaryLabel}>
+            Delivery Fee
+          </Text>
 
-          <Text style={styles.summaryValue}>Rs {deliveryFee.toFixed(0)}</Text>
+          <Text style={styles.summaryValue}>
+            Rs {deliveryFee.toFixed(0)}
+          </Text>
         </View>
 
         <View
@@ -252,14 +409,20 @@ export default function CartScreen() {
             },
           ]}
         >
-          <Text style={styles.totalLabel}>Total</Text>
+          <Text style={styles.totalLabel}>
+            Total
+          </Text>
 
-          <Text style={styles.totalValue}>Rs {total.toFixed(0)}</Text>
+          <Text style={styles.totalValue}>
+            Rs {total.toFixed(0)}
+          </Text>
         </View>
 
         <Button
           title="Proceed to Checkout"
-          onPress={() => router.push("/checkout/address")}
+          onPress={() =>
+            router.push("/checkout/address")
+          }
           style={{
             marginTop: spacing.md,
           }}
@@ -275,22 +438,34 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
 
-  /*
-   * 12px space from the top.
-   * No elevation or shadow.
-   * No bottom margin, so the list can move
-   * directly underneath the SearchBar.
-   */
   searchContainer: {
     marginTop: 12,
     backgroundColor: colors.background,
     zIndex: 10,
   },
 
-  /*
-   * The initial gap belongs to the FlatList.
-   * It scrolls away together with the content.
-   */
+  clearCartContainer: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.xs,
+    alignItems: "flex-end",
+    backgroundColor: colors.background,
+  },
+
+  clearCartButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+  },
+
+  clearCartText: {
+    ...typography.caption,
+    color: colors.danger,
+    fontWeight: "700",
+  },
+
   listContent: {
     paddingTop: spacing.sm,
     paddingHorizontal: spacing.lg,

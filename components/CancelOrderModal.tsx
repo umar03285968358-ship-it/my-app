@@ -2,21 +2,22 @@ import { colors, radius, spacing, typography } from "@/constants/theme";
 import { Ionicons } from "@expo/vector-icons";
 import React, { useState } from "react";
 import {
-    ActivityIndicator,
-    Modal,
-    Pressable,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Modal,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 
 type Props = {
   visible: boolean;
   orderNo: number | null;
   onClose: () => void;
-  // Return a promise — the modal shows a spinner and stays open until it resolves.
-  onConfirm: () => Promise<void>;
+  // Return the cancellation comment to the parent.
+  onConfirm: (comment: string) => Promise<void>;
 };
 
 export default function CancelOrderModal({
@@ -27,14 +28,24 @@ export default function CancelOrderModal({
 }: Props) {
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [comment, setComment] = useState("");
 
   const handleConfirm = async () => {
     if (submitting) return;
 
+    const trimmedComment = comment.trim();
+
+    if (!trimmedComment) {
+      setErrorMsg("Please enter a cancellation reason.");
+      return;
+    }
+
     try {
       setSubmitting(true);
       setErrorMsg(null);
-      await onConfirm();
+
+      await onConfirm(trimmedComment);
+
       // onConfirm is expected to close the modal itself on success
       // (so the parent controls when `orderNo` is cleared).
     } catch (e: any) {
@@ -47,7 +58,9 @@ export default function CancelOrderModal({
 
   const handleClose = () => {
     if (submitting) return;
+
     setErrorMsg(null);
+    setComment("");
     onClose();
   };
 
@@ -85,6 +98,35 @@ export default function CancelOrderModal({
             cannot be undone.
           </Text>
 
+          <View style={styles.inputContainer}>
+            <Text style={styles.inputLabel}>
+              Cancellation Reason <Text style={styles.required}>*</Text>
+            </Text>
+
+            <TextInput
+              style={styles.commentInput}
+              value={comment}
+              onChangeText={(text) => {
+                setComment(text);
+
+                if (text.trim()) {
+                  setErrorMsg(null);
+                }
+              }}
+              placeholder="Please tell us why you want to cancel this order..."
+              placeholderTextColor="#999"
+              multiline
+              numberOfLines={4}
+              textAlignVertical="top"
+              editable={!submitting}
+              maxLength={500}
+            />
+
+            <Text style={styles.characterCount}>
+              {comment.length}/500
+            </Text>
+          </View>
+
           {errorMsg && <Text style={styles.errorText}>{errorMsg}</Text>}
 
           <View style={styles.buttonRow}>
@@ -98,7 +140,11 @@ export default function CancelOrderModal({
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[styles.button, styles.dangerButton]}
+              style={[
+                styles.button,
+                styles.dangerButton,
+                !comment.trim() && styles.disabledDangerButton,
+              ]}
               onPress={handleConfirm}
               disabled={submitting}
               activeOpacity={0.8}
@@ -152,6 +198,42 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
 
+  inputContainer: {
+    width: "100%",
+    marginBottom: spacing.sm,
+  },
+
+  inputLabel: {
+    ...typography.caption,
+    color: colors.textPrimary,
+    fontWeight: "600",
+    marginBottom: spacing.xs,
+  },
+
+  required: {
+    color: colors.danger,
+  },
+
+  commentInput: {
+    width: "100%",
+    minHeight: 90,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    backgroundColor: colors.card,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
+    color: colors.textPrimary,
+    fontSize: 14,
+  },
+
+  characterCount: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    textAlign: "right",
+    marginTop: 4,
+  },
+
   errorText: {
     ...typography.caption,
     color: colors.danger,
@@ -187,6 +269,10 @@ const styles = StyleSheet.create({
 
   dangerButton: {
     backgroundColor: colors.danger,
+  },
+
+  disabledDangerButton: {
+    opacity: 0.6,
   },
 
   dangerButtonText: {

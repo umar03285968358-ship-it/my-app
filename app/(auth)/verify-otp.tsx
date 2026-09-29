@@ -154,11 +154,10 @@ export default function VerifyOtpScreen() {
       <Text style={styles.title}>Verify OTP</Text>
 
       <Image
-        source={{
-          uri: "https://images.unsplash.com/photo-1587668178277-295251f900ce?w=400",
-        }}
+      source={require('../../assets/images/logo.png')}
         style={styles.image}
       />
+
 
       <Text style={styles.description}>
         Enter the OTP sent to your email along with your new password.
@@ -281,13 +280,12 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
 
-  image: {
-    width: width * 0.5,
-    height: width * 0.5,
-    borderRadius: 999,
-    marginBottom: spacing.lg,
-  },
-
+ image: {
+  width: width * 0.75,
+  height: width * 0.5,
+  marginBottom: spacing.lg,
+  resizeMode: 'contain',
+},
   description: {
     ...typography.body,
     color: colors.textSecondary,

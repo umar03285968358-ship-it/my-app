@@ -25,32 +25,49 @@ type Props = {
   visible: boolean;
   initialValues: UserForm;
   saving: boolean;
+  deleting: boolean;
   onClose: () => void;
   onSave: (values: UserForm) => void;
+  onDeleteAccount: () => Promise<void>;
 };
+
+// Your theme's actual orange.
+const PROFILE_ORANGE = colors.primaryDark;
 
 export default function EditProfileModal({
   visible,
   initialValues,
   saving,
+  deleting,
   onClose,
   onSave,
 }: Props) {
   const [form, setForm] = useState<UserForm>(initialValues);
 
   React.useEffect(() => {
-    if (visible) setForm(initialValues);
+    if (visible) {
+      setForm(initialValues);
+    }
   }, [visible, initialValues]);
 
-  const update = (key: keyof UserForm) => (value: string) =>
-    setForm((prev) => ({ ...prev, [key]: value }));
+  const update = (key: keyof UserForm) => (value: string) => {
+    setForm((prev) => ({
+      ...prev,
+      [key]: value,
+    }));
+  };
+
+  const busy = saving || deleting;
 
   return (
     <Modal
       visible={visible}
       animationType="slide"
       transparent
-      onRequestClose={onClose}
+      onRequestClose={() => {
+        if (deleting) return;
+        onClose();
+      }}
     >
       <KeyboardAvoidingView
         style={styles.overlay}
@@ -59,7 +76,8 @@ export default function EditProfileModal({
         <View style={styles.sheet}>
           <View style={styles.header}>
             <Text style={styles.title}>Edit Profile</Text>
-            <TouchableOpacity onPress={onClose} disabled={saving}>
+
+            <TouchableOpacity onPress={onClose} disabled={busy}>
               <Text style={styles.closeText}>✕</Text>
             </TouchableOpacity>
           </View>
@@ -67,11 +85,11 @@ export default function EditProfileModal({
           <ScrollView
             style={styles.scrollArea}
             contentContainerStyle={styles.scrollContent}
-            showsVerticalScrollIndicator={true}
+            showsVerticalScrollIndicator
             keyboardShouldPersistTaps="handled"
           >
-            {/* First Name */}
             <Text style={styles.label}>First Name</Text>
+
             <TextInput
               style={styles.input}
               placeholder="Enter first name"
@@ -80,8 +98,8 @@ export default function EditProfileModal({
               onChangeText={update("firstName")}
             />
 
-            {/* Last Name */}
             <Text style={styles.label}>Last Name</Text>
+
             <TextInput
               style={styles.input}
               placeholder="Enter last name"
@@ -90,8 +108,8 @@ export default function EditProfileModal({
               onChangeText={update("lastName")}
             />
 
-            {/* Mobile Number */}
             <Text style={styles.label}>Mobile Number</Text>
+
             <TextInput
               style={styles.input}
               placeholder="Enter mobile number"
@@ -101,8 +119,8 @@ export default function EditProfileModal({
               keyboardType="phone-pad"
             />
 
-            {/* Address */}
             <Text style={styles.label}>Address</Text>
+
             <TextInput
               style={[styles.input, styles.textArea]}
               placeholder="Enter address"
@@ -113,8 +131,8 @@ export default function EditProfileModal({
               numberOfLines={2}
             />
 
-            {/* Email */}
             <Text style={styles.label}>Email</Text>
+
             <TextInput
               style={[styles.input, styles.inputDisabled]}
               placeholder="Email"
@@ -125,12 +143,11 @@ export default function EditProfileModal({
             />
           </ScrollView>
 
-          {/* Actions */}
           <View style={styles.actions}>
             <TouchableOpacity
               style={styles.cancelBtn}
               onPress={onClose}
-              disabled={saving}
+              disabled={busy}
             >
               <Text style={styles.cancelText}>Cancel</Text>
             </TouchableOpacity>
@@ -138,10 +155,10 @@ export default function EditProfileModal({
             <TouchableOpacity
               style={styles.saveBtn}
               onPress={() => onSave(form)}
-              disabled={saving}
+              disabled={busy}
             >
               {saving ? (
-                <ActivityIndicator color="#fff" />
+                <ActivityIndicator color={colors.white} />
               ) : (
                 <Text style={styles.saveText}>Save</Text>
               )}
@@ -209,6 +226,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     marginBottom: spacing.sm,
     color: colors.textPrimary,
+    backgroundColor: colors.card,
   },
 
   textArea: {
@@ -249,12 +267,12 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     alignItems: "center",
     borderRadius: radius.md,
-    backgroundColor: colors.accentOrange,
+    backgroundColor: PROFILE_ORANGE,
   },
 
   saveText: {
     ...typography.body,
-    color: "#fff",
+    color: colors.white,
     fontWeight: "700",
   },
 });

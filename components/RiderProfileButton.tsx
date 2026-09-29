@@ -78,8 +78,8 @@ export default function RiderProfileButton({
           activeOpacity={0.7}
         >
           <Ionicons
-            name="person-circle-outline"
-            size={28}
+            name="power-outline"
+            size={26}
             color={colors.primaryDark}
           />
         </TouchableOpacity>

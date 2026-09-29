@@ -33,8 +33,29 @@ export default function ProductCard({
   const hasDiscount = product.discPercentage > 0;
   const quantity = getItemQuantity(product.productID);
 
-  const rating = (product as { rating?: number }).rating;
-  const reviewCount = (product as { reviewCount?: number }).reviewCount;
+  const rating = Math.max(
+    0,
+    Math.min(5, Number(product.ratingStar) || 0),
+  );
+
+  const renderRatingStars = (size: number, gap: number = 0) => {
+    return (
+      <View style={[styles.ratingStars, { gap }]}>
+        {[1, 2, 3, 4, 5].map((star) => (
+          <Ionicons
+            key={star}
+            name={star <= rating ? "star" : "star-outline"}
+            size={size}
+            color={
+              star <= rating
+                ? colors.primaryDark
+                : "#D6D1CC"
+            }
+          />
+        ))}
+      </View>
+    );
+  };
 
   const handleOpenProduct = () =>
     router.push({
@@ -61,12 +82,6 @@ export default function ProductCard({
     updateQty(product.productID, quantity - 1);
   };
 
-  /*
-   * =====================================================
-   * LIST VIEW
-   * =====================================================
-   */
-
   if (viewMode === "list") {
     return (
       <TouchableOpacity
@@ -74,8 +89,6 @@ export default function ProductCard({
         activeOpacity={0.9}
         onPress={handleOpenProduct}
       >
-        {/* IMAGE */}
-
         <View style={styles.listImageContainer}>
           {imageUrl ? (
             <Image
@@ -102,11 +115,7 @@ export default function ProductCard({
           )}
         </View>
 
-        {/* CONTENT */}
-
         <View style={styles.listInfo}>
-          {/* WISHLIST */}
-
           <TouchableOpacity
             style={[styles.listHeart, liked && styles.heartActive]}
             activeOpacity={0.8}
@@ -123,26 +132,13 @@ export default function ProductCard({
             />
           </TouchableOpacity>
 
-          {/* PRODUCT NAME */}
-
-          <Text style={styles.listName} numberOfLines={1} ellipsizeMode="tail">
+          <Text
+            style={styles.listName}
+            numberOfLines={1}
+            ellipsizeMode="tail"
+          >
             {product.productTitle}
           </Text>
-
-          {/* RATING */}
-
-          {typeof rating === "number" && (
-            <View style={styles.listRatingRow}>
-              <Ionicons name="star" size={12} color={colors.primaryDark} />
-
-              <Text style={styles.ratingText}>
-                {rating.toFixed(1)}
-                {typeof reviewCount === "number" ? ` (${reviewCount})` : ""}
-              </Text>
-            </View>
-          )}
-
-          {/* PRICE + CART */}
 
           <View style={styles.listBottomRow}>
             <View style={styles.priceGroup}>
@@ -162,6 +158,11 @@ export default function ProductCard({
               )}
             </View>
 
+            {/* LIST VIEW — stars stay exactly beside the cart */}
+            <View style={styles.listRatingContainer}>
+              {renderRatingStars(11, 0)}
+            </View>
+
             {quantity === 0 ? (
               <TouchableOpacity
                 style={styles.cartButton}
@@ -169,7 +170,11 @@ export default function ProductCard({
                 onPress={handleAdd}
                 hitSlop={6}
               >
-                <Ionicons name="cart-outline" size={16} color={colors.white} />
+                <Ionicons
+                  name="cart-outline"
+                  size={16}
+                  color={colors.white}
+                />
               </TouchableOpacity>
             ) : (
               <View style={styles.stepper}>
@@ -179,7 +184,11 @@ export default function ProductCard({
                   onPress={handleDecrement}
                   hitSlop={6}
                 >
-                  <Ionicons name="remove" size={14} color={colors.white} />
+                  <Ionicons
+                    name="remove"
+                    size={14}
+                    color={colors.white}
+                  />
                 </TouchableOpacity>
 
                 <Text style={styles.stepperQty}>{quantity}</Text>
@@ -190,7 +199,11 @@ export default function ProductCard({
                   onPress={handleIncrement}
                   hitSlop={6}
                 >
-                  <Ionicons name="add" size={14} color={colors.white} />
+                  <Ionicons
+                    name="add"
+                    size={14}
+                    color={colors.white}
+                  />
                 </TouchableOpacity>
               </View>
             )}
@@ -200,20 +213,12 @@ export default function ProductCard({
     );
   }
 
-  /*
-   * =====================================================
-   * GRID VIEW
-   * =====================================================
-   */
-
   return (
     <TouchableOpacity
       style={styles.card}
       activeOpacity={0.9}
       onPress={handleOpenProduct}
     >
-      {/* IMAGE */}
-
       <View style={styles.imageContainer}>
         {imageUrl ? (
           <Image
@@ -231,8 +236,6 @@ export default function ProductCard({
           </View>
         )}
 
-        {/* DISCOUNT */}
-
         {hasDiscount && (
           <View style={styles.discountBadge}>
             <Text style={styles.discountBadgeText}>
@@ -240,8 +243,6 @@ export default function ProductCard({
             </Text>
           </View>
         )}
-
-        {/* WISHLIST */}
 
         <TouchableOpacity
           style={[styles.heart, liked && styles.heartActive]}
@@ -260,31 +261,17 @@ export default function ProductCard({
         </TouchableOpacity>
       </View>
 
-      {/* INFO */}
-
       <View style={styles.infoContainer}>
-        {/* PRODUCT NAME */}
-
-        <Text style={styles.name} numberOfLines={1} ellipsizeMode="tail">
+        <Text
+          style={styles.name}
+          numberOfLines={1}
+          ellipsizeMode="tail"
+        >
           {product.productTitle}
         </Text>
 
-        {/* RATING */}
-
-        {typeof rating === "number" && (
-          <View style={styles.ratingRow}>
-            <Ionicons name="star" size={13} color={colors.primaryDark} />
-
-            <Text style={styles.ratingText}>
-              {rating.toFixed(1)}
-              {typeof reviewCount === "number" ? ` (${reviewCount})` : ""}
-            </Text>
-          </View>
-        )}
-
-        {/* PRICE + CART */}
-
-        <View style={styles.bottomRow}>
+        {/* PRICE ROW */}
+        <View style={styles.gridPriceRow}>
           <View style={styles.priceGroup}>
             <Text
               style={styles.price}
@@ -309,7 +296,11 @@ export default function ProductCard({
               onPress={handleAdd}
               hitSlop={6}
             >
-              <Ionicons name="cart-outline" size={17} color={colors.white} />
+              <Ionicons
+                name="cart-outline"
+                size={17}
+                color={colors.white}
+              />
             </TouchableOpacity>
           ) : (
             <View style={styles.stepper}>
@@ -319,7 +310,11 @@ export default function ProductCard({
                 onPress={handleDecrement}
                 hitSlop={6}
               >
-                <Ionicons name="remove" size={15} color={colors.white} />
+                <Ionicons
+                  name="remove"
+                  size={15}
+                  color={colors.white}
+                />
               </TouchableOpacity>
 
               <Text style={styles.stepperQty}>{quantity}</Text>
@@ -330,10 +325,19 @@ export default function ProductCard({
                 onPress={handleIncrement}
                 hitSlop={6}
               >
-                <Ionicons name="add" size={15} color={colors.white} />
+                <Ionicons
+                  name="add"
+                  size={15}
+                  color={colors.white}
+                />
               </TouchableOpacity>
             </View>
           )}
+        </View>
+
+        {/* GRID VIEW — stars directly underneath the price */}
+        <View style={styles.gridRatingRow}>
+          {renderRatingStars(10, 0)}
         </View>
       </View>
     </TouchableOpacity>
@@ -341,10 +345,6 @@ export default function ProductCard({
 }
 
 const styles = StyleSheet.create({
-  /* =====================================================
-     GRID CARD
-  ===================================================== */
-
   card: {
     width: "100%",
     backgroundColor: colors.white,
@@ -353,12 +353,8 @@ const styles = StyleSheet.create({
     borderColor: colors.primaryDark,
     overflow: "hidden",
     marginBottom: spacing.md,
-
     shadowColor: "transparent",
-    shadowOffset: {
-      width: 0,
-      height: 0,
-    },
+    shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0,
     shadowRadius: 0,
     elevation: 0,
@@ -424,8 +420,8 @@ const styles = StyleSheet.create({
   infoContainer: {
     paddingHorizontal: 9,
     paddingTop: 7,
-    paddingBottom: 7,
-    gap: 2,
+    paddingBottom: 5,
+    gap: 0,
   },
 
   name: {
@@ -438,25 +434,11 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
 
-  ratingRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    height: 18,
-  },
-
-  ratingText: {
-    ...typography.caption,
-    fontSize: 12,
-    color: colors.textSecondary,
-    fontWeight: "600",
-  },
-
-  bottomRow: {
+  gridPriceRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginTop: -2,
+    marginTop: 0,
     minHeight: 34,
     width: "100%",
   },
@@ -488,9 +470,21 @@ const styles = StyleSheet.create({
     transform: [{ translateY: -5 }],
   },
 
-  /* =====================================================
-     CART
-  ===================================================== */
+  /* GRID RATING — separate line underneath price */
+  gridRatingRow: {
+    height: 13,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-start",
+    marginTop: -6,
+    marginBottom: 0,
+  },
+
+  ratingStars: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
 
   cartButton: {
     width: 34,
@@ -529,32 +523,18 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
 
-  /* =====================================================
-     LIST CARD
-  ===================================================== */
-
   listCard: {
     width: "100%",
     height: 104,
-
     backgroundColor: colors.white,
-
     borderRadius: radius.lg,
-
     borderWidth: 1.5,
     borderColor: colors.primaryDark,
-
     overflow: "hidden",
-
     marginBottom: 8,
-
     flexDirection: "row",
-
     shadowColor: "transparent",
-    shadowOffset: {
-      width: 0,
-      height: 0,
-    },
+    shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0,
     shadowRadius: 0,
     elevation: 0,
@@ -563,11 +543,8 @@ const styles = StyleSheet.create({
   listImageContainer: {
     width: 104,
     height: 104,
-
     backgroundColor: "#FFF7F1",
-
     position: "relative",
-
     padding: 5,
   },
 
@@ -579,121 +556,76 @@ const styles = StyleSheet.create({
   listImageFallback: {
     width: "100%",
     height: "100%",
-
     alignItems: "center",
     justifyContent: "center",
-
     backgroundColor: "#FFF7F1",
   },
 
   listDiscountBadge: {
     position: "absolute",
-
     top: 6,
     left: 6,
-
     backgroundColor: colors.primaryDark,
-
     paddingHorizontal: 6,
     paddingVertical: 3,
-
     borderRadius: 6,
   },
 
   listInfo: {
     flex: 1,
-
     minWidth: 0,
-
     paddingLeft: 10,
     paddingRight: 9,
-
     paddingVertical: 8,
-
     justifyContent: "space-between",
-
     position: "relative",
   },
 
   listHeart: {
     position: "absolute",
-
     top: 7,
     right: 7,
-
     width: 27,
     height: 27,
-
     borderRadius: radius.pill,
-
     backgroundColor: colors.white,
-
     alignItems: "center",
     justifyContent: "center",
-
     borderWidth: 1,
     borderColor: colors.primaryDark,
-
     zIndex: 5,
   },
 
   listName: {
     ...typography.body,
-
     color: colors.textPrimary,
-
     fontWeight: "800",
-
     fontSize: 14,
-
     lineHeight: 18,
-
     height: 18,
-
     paddingRight: 34,
-
     flexShrink: 1,
-  },
-
-  /*
-   * IMPORTANT:
-   * React Native StyleSheet does NOT support
-   * CSS-style nested selectors.
-   */
-
-  listRatingRow: {
-    flexDirection: "row",
-
-    alignItems: "center",
-
-    gap: 4,
-
-    height: 16,
   },
 
   listBottomRow: {
     flexDirection: "row",
-
     alignItems: "center",
-
     justifyContent: "space-between",
-
     width: "100%",
-
     height: 34,
   },
 
   listPrice: {
     ...typography.body,
-
     color: colors.primaryDark,
-
     fontWeight: "900",
-
     fontSize: 16,
-
     flexShrink: 1,
-
     transform: [{ translateY: -3 }],
+  },
+
+  listRatingContainer: {
+    flexShrink: 0,
+    marginRight: 6,
   },
 });

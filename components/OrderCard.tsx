@@ -31,6 +31,9 @@ export default function OrderCard({
   onPress,
   cancellable = false,
   onCancelPress,
+  ratable = false,
+  rated = false,
+  onRatePress,
 }: {
   order: MobOrder;
   // Tapping the card opens the full order-detail modal (which fetches
@@ -38,6 +41,14 @@ export default function OrderCard({
   onPress: () => void;
   cancellable?: boolean;
   onCancelPress?: () => void;
+  // Shown once the order is Delivered — tapping the star opens the
+  // rating modal (quality + rider service + remarks).
+  ratable?: boolean;
+  // Whether the user has already submitted a rating for this order.
+  // Just changes the star's look (outline vs filled) - tapping it
+  // either way still opens the modal, so they can edit their rating.
+  rated?: boolean;
+  onRatePress?: () => void;
 }) {
   const statusStyle = STATUS_STYLES[order.orderStatus] ?? STATUS_STYLES.Pending;
 
@@ -46,6 +57,12 @@ export default function OrderCard({
   const handleCancelPress = (e: any) => {
     e.stopPropagation?.();
     onCancelPress?.();
+  };
+
+  // Same idea for rating — don't also open the detail modal.
+  const handleRatePress = (e: any) => {
+    e.stopPropagation?.();
+    onRatePress?.();
   };
 
   return (
@@ -66,6 +83,22 @@ export default function OrderCard({
               {order.orderStatus}
             </Text>
           </View>
+
+          {/* Only shown once the order is Delivered — OrdersScreen
+              already gates `ratable` on that. */}
+          {ratable && (
+            <TouchableOpacity
+              onPress={handleRatePress}
+              style={styles.rateIconButton}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Ionicons
+                name={rated ? "star" : "star-outline"}
+                size={20}
+                color="#F1731F"
+              />
+            </TouchableOpacity>
+          )}
 
           {/* Only shown while the order is still Pending/Processing —
               OrdersScreen already gates `cancellable` on that. */}
@@ -120,6 +153,7 @@ const styles = StyleSheet.create({
   badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
   badgeText: { fontSize: 11, fontWeight: "700" },
   cancelIconButton: { padding: 2 },
+  rateIconButton: { padding: 2 },
   metaRow: {
     flexDirection: "row",
     justifyContent: "space-between",

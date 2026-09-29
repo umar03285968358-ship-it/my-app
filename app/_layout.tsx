@@ -1,8 +1,4 @@
-import {
-  DarkTheme,
-  DefaultTheme,
-  ThemeProvider,
-} from "@react-navigation/native";
+import { DefaultTheme, ThemeProvider } from "@react-navigation/native";
 import {
   router,
   Stack,
@@ -14,6 +10,7 @@ import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useRef, useState } from "react";
 import { BackHandler, ToastAndroid, View } from "react-native";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import "react-native-reanimated";
 import {
   SafeAreaProvider,
@@ -24,12 +21,23 @@ import CustomerHeader, {
   CUSTOMER_HEADER_HEIGHT,
 } from "@/components/CustomerHeader";
 import StatusBarBackground from "@/components/StatusBarBackground";
+import { colors } from "@/constants/theme";
 import { CartProvider } from "@/context/CartContext";
 import { CheckoutProvider } from "@/context/CheckoutContext";
 import { HeaderSearchProvider } from "@/context/HeaderSearchContext";
 import { WishlistProvider } from "@/context/WishlistContext";
-import { useColorScheme } from "@/hooks/use-color-scheme";
-import { getToken, getUser } from "@/services/authStorage";
+import {
+  AuthChangeEvent,
+  getToken,
+  getUser,
+  subscribeAuthChange,
+} from "@/services/authStorage";
+import {
+  getOneSignalSubscriptionId,
+  initializeOneSignal,
+  requestOneSignalPermission,
+} from "@/services/oneSignal";
+import { resolvePostLoginRoute } from "@/utils/authRouting";
 
 export const unstable_settings = {
   anchor: "(auth)",
@@ -37,82 +45,168 @@ export const unstable_settings = {
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
-type LandingRoute = "/(rider)/dashboard" | "/(tabs)";
+type UserRole = "rider" | "admin" | "customer";
+
+function deriveUserType(user: any): UserRole {
+  const userType = String(user?.userType ?? "")
+    .trim()
+    .toLowerCase();
+
+  if (userType === "rider") return "rider";
+  if (userType === "admin") return "admin";
+  return "customer";
+}
+
+interface AuthState {
+  checked: boolean;
+  loggedIn: boolean;
+  userType: UserRole;
+}
 
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
   const navigationState = useRootNavigationState();
 
-  const [authChecked, setAuthChecked] = useState(false);
-  const [hasToken, setHasToken] = useState(false);
+  const [authState, setAuthState] = useState<AuthState>({
+    checked: false,
+    loggedIn: false,
+    userType: "customer",
+  });
 
-  const [landingRoute, setLandingRoute] = useState<LandingRoute>("/(tabs)");
+  // --------------------------------------------------------------
+  // ONESIGNAL INITIALIZATION
+  // --------------------------------------------------------------
 
-  const hasRedirected = useRef(false);
+  useEffect(() => {
+    const setupOneSignal = async () => {
+      initializeOneSignal();
+      await requestOneSignalPermission();
+      await getOneSignalSubscriptionId();
+    };
+
+    setupOneSignal();
+  }, []);
+
+  const lastRedirectedFor = useRef<string | null>(null);
+
+  // --------------------------------------------------------------
+  // INITIAL AUTH CHECK
+  // --------------------------------------------------------------
 
   useEffect(() => {
     (async () => {
       try {
         const token = await getToken();
+        const user = token ? await getUser() : null;
 
-        setHasToken(!!token);
-
-        if (token) {
-          const user = await getUser();
-
-          const userType = String(user?.userType ?? "")
-            .trim()
-            .toLowerCase();
-
-          setLandingRoute(
-            userType === "rider" ? "/(rider)/dashboard" : "/(tabs)",
-          );
-        }
+        setAuthState({
+          checked: true,
+          loggedIn: !!token,
+          userType: deriveUserType(user),
+        });
       } catch (e) {
-        console.log("[ROOT LAYOUT] Auth check failed:", e);
+        console.error("[ROOT LAYOUT] Auth check failed:", e);
 
-        setHasToken(false);
-      } finally {
-        setAuthChecked(true);
+        setAuthState({
+          checked: true,
+          loggedIn: false,
+          userType: "customer",
+        });
       }
     })();
   }, []);
 
+  // --------------------------------------------------------------
+  // LOGIN / LOGOUT
+  // --------------------------------------------------------------
+
   useEffect(() => {
-    if (!authChecked) return;
+    const unsubscribe = subscribeAuthChange(
+      (event: AuthChangeEvent, user: any | null) => {
+        if (event === "logout") {
+          lastRedirectedFor.current = null;
+
+          setAuthState({
+            checked: true,
+            loggedIn: false,
+            userType: "customer",
+          });
+        } else if (event === "login") {
+          lastRedirectedFor.current = null;
+
+          setAuthState({
+            checked: true,
+            loggedIn: true,
+            userType: deriveUserType(user),
+          });
+        }
+      },
+    );
+
+    return unsubscribe;
+  }, []);
+
+  // --------------------------------------------------------------
+  // AUTH REDIRECT
+  // --------------------------------------------------------------
+
+  useEffect(() => {
+    if (!authState.checked) return;
     if (!navigationState?.key) return;
-    if (hasRedirected.current) return;
 
-    hasRedirected.current = true;
+    const target = authState.loggedIn
+      ? resolvePostLoginRoute({ userType: authState.userType })
+      : "/(auth)/login";
 
-    if (hasToken) {
-      router.replace(landingRoute as Parameters<typeof router.replace>[0]);
-    } else {
-      router.replace("/(auth)/login");
-    }
+    if (lastRedirectedFor.current === target) return;
+
+    lastRedirectedFor.current = target;
+
+    router.replace(target as Parameters<typeof router.replace>[0]);
 
     SplashScreen.hideAsync().catch(() => {});
-  }, [authChecked, navigationState?.key, hasToken, landingRoute]);
+  }, [
+    authState.checked,
+    authState.loggedIn,
+    authState.userType,
+    navigationState?.key,
+  ]);
 
   return (
-    <HeaderSearchProvider>
-      <SafeAreaProvider>
-        <CartProvider>
-          <CheckoutProvider>
-            <WishlistProvider>
-              <ThemeProvider
-                value={colorScheme === "dark" ? DarkTheme : DefaultTheme}
-              >
-                <RootContent />
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <HeaderSearchProvider>
+        <SafeAreaProvider>
+          <CartProvider>
+            <CheckoutProvider>
+              <WishlistProvider>
+                <ThemeProvider value={DefaultTheme}>
+                  {/*
+                   * CRITICAL: don't mount the Stack at all until the
+                   * auth check resolves. While `checked` is false,
+                   * every Stack.Protected guard below evaluates to
+                   * false, which means NO guarded group is registered
+                   * — but any route file living outside a
+                   * Stack.Protected block (e.g. notifications.tsx)
+                   * would still be reachable and could flash as the
+                   * default screen. Rendering a plain background
+                   * view instead guarantees nothing can flash.
+                   */}
+                  {authState.checked ? (
+                    <RootContent authState={authState} />
+                  ) : (
+                    <View
+                      style={{ flex: 1, backgroundColor: colors.background }}
+                    />
+                  )}
 
-                <StatusBarBackground />
-                <StatusBar style="light" />
-              </ThemeProvider>
-            </WishlistProvider>
-          </CheckoutProvider>
-        </CartProvider>
-      </SafeAreaProvider>
-    </HeaderSearchProvider>
+                  <StatusBarBackground />
+                  <StatusBar style="light" />
+                </ThemeProvider>
+              </WishlistProvider>
+            </CheckoutProvider>
+          </CartProvider>
+        </SafeAreaProvider>
+      </HeaderSearchProvider>
+    </GestureHandlerRootView>
   );
 }
 
@@ -125,13 +219,11 @@ export default function RootLayout() {
  * /category/[id]
  * /subcategory/[id]
  * /product/[id]
+ * /notifications
  *
- * But it must NOT appear on auth screens (login,
- * signup, otp, etc.) or on the rider app, since
- * CustomerHeader is customer-only chrome (cart icon,
- * customer page titles, customer search).
+ * But it must NOT appear on auth, rider, or admin screens.
  */
-function RootContent() {
+function RootContent({ authState }: { authState: AuthState }) {
   const insets = useSafeAreaInsets();
   const segments = useSegments();
   const pathname = usePathname();
@@ -142,27 +234,26 @@ function RootContent() {
 
   const isAuthGroup = rootSegment === "(auth)";
   const isRiderGroup = rootSegment === "(rider)";
+  const isAdminGroup = rootSegment === "(admin)";
 
-  const showCustomerHeader = !isAuthGroup && !isRiderGroup;
+  const showCustomerHeader = !isAuthGroup && !isRiderGroup && !isAdminGroup;
 
-  /*
-   * ---------------------------------------------------------
-   * ANDROID BACK BUTTON
-   *
-   * On the customer home screen:
-   *
-   * First press:
-   *   "Press back again to exit"
-   *
-   * Second press within 2 seconds:
-   *   Exit the application.
-   *
-   * This prevents Android from navigating back to the
-   * previous root/auth route and displaying the splash screen.
-   *
-   * Other screens keep their normal Expo Router behavior.
-   * ---------------------------------------------------------
-   */
+  const isCustomerLoggedIn =
+    authState.checked &&
+    authState.loggedIn &&
+    authState.userType === "customer";
+
+  const isRiderLoggedIn =
+    authState.checked && authState.loggedIn && authState.userType === "rider";
+
+  const isAdminLoggedIn =
+    authState.checked && authState.loggedIn && authState.userType === "admin";
+
+  const isLoggedOut = authState.checked && !authState.loggedIn;
+
+  // --------------------------------------------------------------
+  // ANDROID BACK BUTTON
+  // --------------------------------------------------------------
 
   const lastBackPress = useRef(0);
 
@@ -174,30 +265,17 @@ function RootContent() {
 
   useEffect(() => {
     const handleBackPress = () => {
-      /*
-       * Only handle Android back specially on Home.
-       *
-       * For Category, Product, Cart, Orders, etc.,
-       * return false so Expo Router handles navigation normally.
-       */
       if (!isHome) {
         return false;
       }
 
       const currentTime = Date.now();
 
-      /*
-       * Second press within 2 seconds = exit app.
-       */
       if (currentTime - lastBackPress.current < 2000) {
         BackHandler.exitApp();
-
         return true;
       }
 
-      /*
-       * First press.
-       */
       lastBackPress.current = currentTime;
 
       ToastAndroid.show("Press back again to exit", ToastAndroid.SHORT);
@@ -215,89 +293,6 @@ function RootContent() {
     };
   }, [isHome]);
 
-  /*
-   * ---------------------------------------------------------
-   * AUTH SCREEN PROTECTION
-   *
-   * Whenever the user reaches an auth screen, check
-   * AsyncStorage again.
-   *
-   * If a token already exists, do NOT allow the user to
-   * remain on Login / Signup / OTP etc.
-   *
-   * Instead send them to their correct landing route.
-   *
-   * If there is no token, do nothing and allow the auth
-   * screen to continue normally.
-   * ---------------------------------------------------------
-   */
-
-  const authRedirecting = useRef(false);
-
-  useEffect(() => {
-    if (!isAuthGroup) {
-      authRedirecting.current = false;
-      return;
-    }
-
-    let mounted = true;
-
-    const checkExistingSession = async () => {
-      try {
-        /*
-         * Avoid running another redirect while the current
-         * auth redirect is already in progress.
-         */
-        if (authRedirecting.current) {
-          return;
-        }
-
-        const token = await getToken();
-
-        if (!mounted) return;
-
-        /*
-         * No token:
-         *
-         * User is genuinely logged out.
-         * Allow Login / Signup / OTP to stay visible.
-         */
-        if (!token) {
-          return;
-        }
-
-        /*
-         * Token exists:
-         *
-         * User is already logged in.
-         * Do not allow them to stay inside auth screens.
-         */
-        const user = await getUser();
-
-        if (!mounted) return;
-
-        const userType = String(user?.userType ?? "")
-          .trim()
-          .toLowerCase();
-
-        const destination: LandingRoute =
-          userType === "rider" ? "/(rider)/dashboard" : "/(tabs)";
-
-        authRedirecting.current = true;
-
-        router.replace(destination as Parameters<typeof router.replace>[0]);
-      } catch (error) {
-        console.log("[ROOT CONTENT] Auth screen session check failed:", error);
-      }
-    };
-
-    checkExistingSession();
-
-    return () => {
-      mounted = false;
-    };
-  }, [isAuthGroup]);
-
   return (
     <View style={{ flex: 1 }}>
       <Stack
@@ -305,131 +300,129 @@ function RootContent() {
           headerShown: false,
         }}
       >
-        {/* ================================
-            AUTH
-        ================================= */}
+        {/* AUTH */}
 
-        <Stack.Screen
-          name="(auth)"
-          options={{
-            headerShown: false,
-          }}
-        />
+        <Stack.Protected guard={isLoggedOut}>
+          <Stack.Screen
+            name="(auth)"
+            options={{
+              headerShown: false,
+            }}
+          />
+        </Stack.Protected>
 
-        {/* ================================
-            CUSTOMER TABS
-        ================================= */}
+        {/* CUSTOMER */}
 
-        <Stack.Screen
-          name="(tabs)"
-          options={{
-            headerShown: false,
-          }}
-        />
+        <Stack.Protected guard={isCustomerLoggedIn}>
+          <Stack.Screen
+            name="(tabs)"
+            options={{
+              headerShown: false,
+            }}
+          />
 
-        {/* ================================
-            RIDER
-        ================================= */}
+          <Stack.Screen
+            name="category/[id]"
+            options={{
+              headerShown: false,
+              contentStyle: {
+                paddingTop: headerHeight,
+                backgroundColor: colors.background,
+              },
+            }}
+          />
 
-        <Stack.Screen
-          name="(rider)"
-          options={{
-            headerShown: false,
-          }}
-        />
+          <Stack.Screen
+            name="subcategory/[id]"
+            options={{
+              headerShown: false,
+              contentStyle: {
+                paddingTop: headerHeight,
+                backgroundColor: colors.background,
+              },
+            }}
+          />
 
-        {/* ================================
-            CATEGORY DETAIL
-        ================================= */}
+          <Stack.Screen
+            name="product/[id]"
+            options={{
+              headerShown: false,
+              contentStyle: {
+                paddingTop: headerHeight,
+                backgroundColor: colors.background,
+              },
+            }}
+          />
 
-        <Stack.Screen
-          name="category/[id]"
-          options={{
-            headerShown: false,
+          <Stack.Screen
+            name="checkout/address"
+            options={{
+              headerShown: false,
+            }}
+          />
 
-            contentStyle: {
-              paddingTop: headerHeight,
-            },
-          }}
-        />
+          <Stack.Screen
+            name="checkout/payment"
+            options={{
+              headerShown: false,
+            }}
+          />
 
-        {/* ================================
-            SUBCATEGORY DETAIL
-        ================================= */}
+          <Stack.Screen
+            name="checkout/summary"
+            options={{
+              headerShown: false,
+            }}
+          />
 
-        <Stack.Screen
-          name="subcategory/[id]"
-          options={{
-            headerShown: false,
+          <Stack.Screen
+            name="order-success"
+            options={{
+              headerShown: false,
+            }}
+          />
 
-            contentStyle: {
-              paddingTop: headerHeight,
-            },
-          }}
-        />
+          <Stack.Screen
+            name="notifications"
+            options={{
+              headerShown: false,
+              contentStyle: {
+                paddingTop: headerHeight,
+                backgroundColor: colors.background,
+              },
+            }}
+          />
 
-        {/* ================================
-            PRODUCT DETAIL
-        ================================= */}
+          <Stack.Screen
+            name="modal"
+            options={{
+              presentation: "modal",
+              title: "Modal",
+            }}
+          />
+        </Stack.Protected>
 
-        <Stack.Screen
-          name="product/[id]"
-          options={{
-            headerShown: false,
+        {/* RIDER */}
 
-            contentStyle: {
-              paddingTop: headerHeight,
-            },
-          }}
-        />
+        <Stack.Protected guard={isRiderLoggedIn}>
+          <Stack.Screen
+            name="(rider)"
+            options={{
+              headerShown: false,
+            }}
+          />
+        </Stack.Protected>
 
-        {/* ================================
-            CHECKOUT
-        ================================= */}
+        {/* ADMIN */}
 
-        <Stack.Screen
-          name="checkout/address"
-          options={{
-            headerShown: false,
-          }}
-        />
-
-        <Stack.Screen
-          name="checkout/payment"
-          options={{
-            headerShown: false,
-          }}
-        />
-
-        <Stack.Screen
-          name="checkout/summary"
-          options={{
-            headerShown: false,
-          }}
-        />
-
-        {/* ================================
-            ORDER SUCCESS
-        ================================= */}
-
-        <Stack.Screen
-          name="order-success"
-          options={{
-            headerShown: false,
-          }}
-        />
-
-        {/* ================================
-            MODAL
-        ================================= */}
-
-        <Stack.Screen
-          name="modal"
-          options={{
-            presentation: "modal",
-            title: "Modal",
-          }}
-        />
+        <Stack.Protected guard={isAdminLoggedIn}>
+          <Stack.Screen
+            name="(admin)"
+            options={{
+              headerShown: false,
+            }}
+          />
+        </Stack.Protected>
       </Stack>
 
       {showCustomerHeader && <CustomerHeader />}

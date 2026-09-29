@@ -1,3 +1,4 @@
+import KeyboardScreen from "@/components/KeyboardScreen";
 import SearchBar from "@/components/Searchbar";
 import { colors, radius, spacing, typography } from "@/constants/theme";
 import { useHeaderSearch } from "@/context/HeaderSearchContext";
@@ -119,6 +120,7 @@ export default function CategorySubcategoriesScreen() {
   }, [subcategoryList, search]);
 
   return (
+    <KeyboardScreen>
     <View style={styles.container}>
       {!loading && !error && subcategoryList.length > 0 && (
         <>
@@ -288,6 +290,7 @@ export default function CategorySubcategoriesScreen() {
         />
       )}
     </View>
+    </KeyboardScreen>
   );
 }
 

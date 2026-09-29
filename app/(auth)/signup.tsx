@@ -1,16 +1,14 @@
 import Button from "@/components/Button";
 import Input from "@/components/Input";
+import KeyboardScreen from "@/components/KeyboardScreen";
 import { colors, spacing, typography } from "@/constants/theme";
-import {
-  signupUser,
-} from "@/services/api";
+import { signupUser } from "@/services/api";
 import { router } from "expo-router";
 import React, { useState } from "react";
 import {
   Alert,
   Dimensions,
   Image,
-  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -41,10 +39,13 @@ export default function SignupScreen() {
    * REGEX
    * ============================================================
    */
+
   const nameRegex =
     /^[A-Za-zÀ-ÿ]+(?:[ '-][A-Za-zÀ-ÿ]+)*$/;
+
   const emailRegex =
     /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
+
   const phoneRegex =
     /^(?:03\d{9}|923\d{9}|\+923\d{9})$/;
 
@@ -53,6 +54,7 @@ export default function SignupScreen() {
    * ERROR HELPER
    * ============================================================
    */
+
   const setFieldError = (
     field: keyof typeof errors,
     message: string,
@@ -68,57 +70,85 @@ export default function SignupScreen() {
    * VALIDATION
    * ============================================================
    */
+
   const validateFirstName = (value: string) => {
     const cleanValue = value.trim();
+
     if (!cleanValue) return "First name is required.";
+
     if (cleanValue.length < 2)
       return "First name must contain at least 2 characters.";
+
     if (cleanValue.length > 30)
       return "First name cannot be longer than 30 characters.";
+
     if (!nameRegex.test(cleanValue))
       return "Only letters, spaces, apostrophes and hyphens are allowed.";
+
     return "";
   };
 
   const validateLastName = (value: string) => {
     const cleanValue = value.trim();
+
     if (!cleanValue) return "Last name is required.";
+
     if (cleanValue.length < 2)
       return "Last name must contain at least 2 characters.";
+
     if (cleanValue.length > 30)
       return "Last name cannot be longer than 30 characters.";
+
     if (!nameRegex.test(cleanValue))
       return "Only letters, spaces, apostrophes and hyphens are allowed.";
+
     return "";
   };
 
   const validateEmail = (value: string) => {
     const cleanValue = value.trim();
+
     if (!cleanValue) return "Email address is required.";
-    if (cleanValue.length > 100) return "Email address is too long.";
+
+    if (cleanValue.length > 100)
+      return "Email address is too long.";
+
     if (!emailRegex.test(cleanValue))
       return "Please enter a valid email address.";
+
     return "";
   };
 
   const validatePhone = (value: string) => {
     const cleanValue = value.trim().replace(/\s+/g, "");
-    if (!cleanValue) return "Mobile number is required.";
+
+    if (!cleanValue)
+      return "Mobile number is required.";
+
     if (!phoneRegex.test(cleanValue))
       return "Enter a valid Pakistani mobile number.";
+
     return "";
   };
 
   const validatePassword = (value: string) => {
     if (!value) return "Password is required.";
-    if (value.length < 8) return "Password must be at least 8 characters.";
+
+    if (value.length < 8)
+      return "Password must be at least 8 characters.";
+
     if (value.length > 64)
       return "Password cannot be longer than 64 characters.";
+
     if (!/[A-Z]/.test(value))
       return "Password must contain an uppercase letter.";
+
     if (!/[a-z]/.test(value))
       return "Password must contain a lowercase letter.";
-    if (!/[0-9]/.test(value)) return "Password must contain a number.";
+
+    if (!/[0-9]/.test(value))
+      return "Password must contain a number.";
+
     return "";
   };
 
@@ -126,8 +156,12 @@ export default function SignupScreen() {
     value: string,
     currentPassword: string,
   ) => {
-    if (!value) return "Please confirm your password.";
-    if (value !== currentPassword) return "Passwords do not match.";
+    if (!value)
+      return "Please confirm your password.";
+
+    if (value !== currentPassword)
+      return "Passwords do not match.";
+
     return "";
   };
 
@@ -136,6 +170,7 @@ export default function SignupScreen() {
    * NORMAL SIGNUP
    * ============================================================
    */
+
   const handleSignup = async () => {
     const validationErrors = {
       firstName: validateFirstName(firstName),
@@ -187,6 +222,7 @@ export default function SignupScreen() {
        * CHECK BACKEND RESPONSE
        * ============================================================
        */
+
       const message = String(
         response?.msg ?? "",
       ).trim();
@@ -249,9 +285,10 @@ export default function SignupScreen() {
       } else if (isEmailExists) {
         /*
          * ============================================================
-         * EMAIL ALREADY EXISTS - Show error for normal signup
+         * EMAIL ALREADY EXISTS
          * ============================================================
          */
+
         console.warn(
           "[SIGNUP SCREEN] Email already exists:",
           message,
@@ -268,6 +305,7 @@ export default function SignupScreen() {
          * OTHER BACKEND ERROR
          * ============================================================
          */
+
         console.warn(
           "[SIGNUP SCREEN] Signup rejected by backend:",
           message,
@@ -300,239 +338,269 @@ export default function SignupScreen() {
    * RENDER
    * ============================================================
    */
-  return (
-    <ScrollView
-      contentContainerStyle={styles.container}
-      keyboardShouldPersistTaps="handled"
-      showsVerticalScrollIndicator={false}
-    >
-      <Text style={styles.title}>Create Account</Text>
-      <Text style={styles.subtitle}>Let's get you started</Text>
 
+  return (
+    <KeyboardScreen>
+      <View style={styles.container}>
+        {/* TITLE */}
+        <Text style={styles.title}>
+          Create Account
+        </Text>
+
+        {/* SUBTITLE */}
+        <Text style={styles.subtitle}>
+          Let's get you started
+        </Text>
+
+        {/* SIGNUP IMAGE */}
       <Image
-        source={{
-          uri: "https://i.pinimg.com/1200x/7c/e5/c0/7ce5c0cf8df035e6126d57b4e271dbac.jpg",
-        }}
+      source={require('../../assets/images/logo.png')}
         style={styles.image}
       />
 
-      <View style={styles.nameRow}>
-        <View style={styles.nameInput}>
-          <Input
-            placeholder="First Name"
-            icon="person-outline"
-            autoCapitalize="words"
-            autoCorrect={false}
-            value={firstName}
-            onChangeText={(value) => {
-              setFirstName(value);
-              if (errors.firstName) {
+        {/* NAME ROW */}
+        <View style={styles.nameRow}>
+          <View style={styles.nameInput}>
+            <Input
+              placeholder="First Name"
+              icon="person-outline"
+              autoCapitalize="words"
+              autoCorrect={false}
+              value={firstName}
+              onChangeText={(value) => {
+                setFirstName(value);
+
+                if (errors.firstName) {
+                  setFieldError(
+                    "firstName",
+                    validateFirstName(value),
+                  );
+                }
+              }}
+              onBlur={() =>
                 setFieldError(
                   "firstName",
-                  validateFirstName(value),
-                );
+                  validateFirstName(firstName),
+                )
               }
-            }}
-            onBlur={() =>
-              setFieldError(
-                "firstName",
-                validateFirstName(firstName),
-              )
-            }
-          />
-          {!!errors.firstName && (
-            <Text style={styles.errorText}>
-              {errors.firstName}
-            </Text>
-          )}
-        </View>
+            />
 
-        <View style={styles.nameInput}>
-          <Input
-            placeholder="Last Name"
-            icon="person-outline"
-            autoCapitalize="words"
-            autoCorrect={false}
-            value={lastName}
-            onChangeText={(value) => {
-              setLastName(value);
-              if (errors.lastName) {
+            {!!errors.firstName && (
+              <Text style={styles.errorText}>
+                {errors.firstName}
+              </Text>
+            )}
+          </View>
+
+          <View style={styles.nameInput}>
+            <Input
+              placeholder="Last Name"
+              icon="person-outline"
+              autoCapitalize="words"
+              autoCorrect={false}
+              value={lastName}
+              onChangeText={(value) => {
+                setLastName(value);
+
+                if (errors.lastName) {
+                  setFieldError(
+                    "lastName",
+                    validateLastName(value),
+                  );
+                }
+              }}
+              onBlur={() =>
                 setFieldError(
                   "lastName",
-                  validateLastName(value),
+                  validateLastName(lastName),
+                )
+              }
+            />
+
+            {!!errors.lastName && (
+              <Text style={styles.errorText}>
+                {errors.lastName}
+              </Text>
+            )}
+          </View>
+        </View>
+
+        {/* EMAIL */}
+        <View style={styles.fieldContainer}>
+          <Input
+            placeholder="Email"
+            icon="mail-outline"
+            keyboardType="email-address"
+            autoCapitalize="none"
+            autoCorrect={false}
+            value={email}
+            onChangeText={(value) => {
+              setEmail(value);
+
+              if (errors.email) {
+                setFieldError(
+                  "email",
+                  validateEmail(value),
                 );
               }
             }}
             onBlur={() =>
               setFieldError(
-                "lastName",
-                validateLastName(lastName),
+                "email",
+                validateEmail(email),
               )
             }
           />
-          {!!errors.lastName && (
+
+          {!!errors.email && (
             <Text style={styles.errorText}>
-              {errors.lastName}
+              {errors.email}
             </Text>
           )}
         </View>
-      </View>
 
-      <View style={styles.fieldContainer}>
-        <Input
-          placeholder="Email"
-          icon="mail-outline"
-          keyboardType="email-address"
-          autoCapitalize="none"
-          autoCorrect={false}
-          value={email}
-          onChangeText={(value) => {
-            setEmail(value);
-            if (errors.email) {
-              setFieldError(
-                "email",
-                validateEmail(value),
-              );
-            }
-          }}
-          onBlur={() =>
-            setFieldError(
-              "email",
-              validateEmail(email),
-            )
-          }
-        />
-        {!!errors.email && (
-          <Text style={styles.errorText}>
-            {errors.email}
-          </Text>
-        )}
-      </View>
+        {/* PHONE */}
+        <View style={styles.fieldContainer}>
+          <Input
+            placeholder="Mobile Number"
+            icon="call-outline"
+            keyboardType="phone-pad"
+            value={phone}
+            onChangeText={(value) => {
+              setPhone(value);
 
-      <View style={styles.fieldContainer}>
-        <Input
-          placeholder="Mobile Number"
-          icon="call-outline"
-          keyboardType="phone-pad"
-          value={phone}
-          onChangeText={(value) => {
-            setPhone(value);
-            if (errors.phone) {
+              if (errors.phone) {
+                setFieldError(
+                  "phone",
+                  validatePhone(value),
+                );
+              }
+            }}
+            onBlur={() =>
               setFieldError(
                 "phone",
-                validatePhone(value),
-              );
+                validatePhone(phone),
+              )
             }
-          }}
-          onBlur={() =>
-            setFieldError(
-              "phone",
-              validatePhone(phone),
-            )
-          }
-        />
-        {!!errors.phone && (
-          <Text style={styles.errorText}>
-            {errors.phone}
-          </Text>
-        )}
-      </View>
+          />
 
-      <View style={styles.fieldContainer}>
-        <Input
-          placeholder="Password"
-          icon="lock-closed-outline"
-          isPassword
-          value={password}
-          onChangeText={(value) => {
-            setPassword(value);
-            if (errors.password) {
+          {!!errors.phone && (
+            <Text style={styles.errorText}>
+              {errors.phone}
+            </Text>
+          )}
+        </View>
+
+        {/* PASSWORD */}
+        <View style={styles.fieldContainer}>
+          <Input
+            placeholder="Password"
+            icon="lock-closed-outline"
+            isPassword
+            value={password}
+            onChangeText={(value) => {
+              setPassword(value);
+
+              if (errors.password) {
+                setFieldError(
+                  "password",
+                  validatePassword(value),
+                );
+              }
+
+              if (confirmPassword) {
+                setFieldError(
+                  "confirmPassword",
+                  validateConfirmPassword(
+                    confirmPassword,
+                    value,
+                  ),
+                );
+              }
+            }}
+            onBlur={() =>
               setFieldError(
                 "password",
-                validatePassword(value),
-              );
+                validatePassword(password),
+              )
             }
-            if (confirmPassword) {
+          />
+
+          {!!errors.password && (
+            <Text style={styles.errorText}>
+              {errors.password}
+            </Text>
+          )}
+
+          {!errors.password &&
+            password.length === 0 && (
+              <Text style={styles.passwordHint}>
+                8+ characters, uppercase, lowercase and
+                number
+              </Text>
+            )}
+        </View>
+
+        {/* CONFIRM PASSWORD */}
+        <View style={styles.fieldContainer}>
+          <Input
+            placeholder="Confirm Password"
+            icon="lock-closed-outline"
+            isPassword
+            value={confirmPassword}
+            onChangeText={(value) => {
+              setConfirmPassword(value);
+
+              if (errors.confirmPassword) {
+                setFieldError(
+                  "confirmPassword",
+                  validateConfirmPassword(
+                    value,
+                    password,
+                  ),
+                );
+              }
+            }}
+            onBlur={() =>
               setFieldError(
                 "confirmPassword",
                 validateConfirmPassword(
                   confirmPassword,
-                  value,
-                ),
-              );
-            }
-          }}
-          onBlur={() =>
-            setFieldError(
-              "password",
-              validatePassword(password),
-            )
-          }
-        />
-        {!!errors.password && (
-          <Text style={styles.errorText}>
-            {errors.password}
-          </Text>
-        )}
-        {!errors.password && password.length === 0 && (
-          <Text style={styles.passwordHint}>
-            8+ characters, uppercase, lowercase and number
-          </Text>
-        )}
-      </View>
-
-      <View style={styles.fieldContainer}>
-        <Input
-          placeholder="Confirm Password"
-          icon="lock-closed-outline"
-          isPassword
-          value={confirmPassword}
-          onChangeText={(value) => {
-            setConfirmPassword(value);
-            if (errors.confirmPassword) {
-              setFieldError(
-                "confirmPassword",
-                validateConfirmPassword(
-                  value,
                   password,
                 ),
-              );
+              )
             }
-          }}
-          onBlur={() =>
-            setFieldError(
-              "confirmPassword",
-              validateConfirmPassword(
-                confirmPassword,
-                password,
-              ),
-            )
-          }
+          />
+
+          {!!errors.confirmPassword && (
+            <Text style={styles.errorText}>
+              {errors.confirmPassword}
+            </Text>
+          )}
+        </View>
+
+        {/* SIGN UP BUTTON */}
+        <Button
+          title="Sign Up"
+          onPress={handleSignup}
+          loading={loading}
+          style={{ marginTop: spacing.sm }}
         />
-        {!!errors.confirmPassword && (
-          <Text style={styles.errorText}>
-            {errors.confirmPassword}
+
+        {/* LOGIN FOOTER */}
+        <Text style={styles.footerText}>
+          Already have an account?{" "}
+          <Text
+            style={styles.link}
+            onPress={() =>
+              router.push("/(auth)/login")
+            }
+          >
+            Login
           </Text>
-        )}
-      </View>
-
-      <Button
-        title="Sign Up"
-        onPress={handleSignup}
-        loading={loading}
-        style={{ marginTop: spacing.sm }}
-      />
-
-      <Text style={styles.footerText}>
-        Already have an account?{" "}
-        <Text
-          style={styles.link}
-          onPress={() => router.push("/(auth)/login")}
-        >
-          Login
         </Text>
-      </Text>
-    </ScrollView>
+      </View>
+    </KeyboardScreen>
   );
 }
 
@@ -541,6 +609,7 @@ export default function SignupScreen() {
  * STYLES
  * ============================================================
  */
+
 const styles = StyleSheet.create({
   container: {
     flexGrow: 1,
@@ -567,11 +636,11 @@ const styles = StyleSheet.create({
   },
 
   image: {
-    width: width * 0.5,
-    height: width * 0.5,
-    borderRadius: 999,
-    marginBottom: spacing.lg,
-  },
+  width: width * 0.75,
+  height: width * 0.5,
+  marginBottom: spacing.lg,
+  resizeMode: 'contain',
+},
 
   nameRow: {
     width: "100%",

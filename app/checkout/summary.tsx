@@ -27,12 +27,18 @@ const SOFT_ORANGE = "#FFF1E8";
 
 export default function CheckoutSummaryScreen() {
   const { items, subtotal, deliveryFee, total, clearCart } = useCart();
-  const { data, resetCheckout } = useCheckout();
+  const { data, resetCheckout, logCheckoutData } = useCheckout();
 
   const [showConfirm, setShowConfirm] = useState(false);
   const [placing, setPlacing] = useState(false);
 
   const placeOrder = async () => {
+    console.log("====================================");
+    console.log("[CHECKOUT SUMMARY] Placing order...");
+    console.log("[CHECKOUT SUMMARY] Full checkout data:");
+    logCheckoutData();
+    console.log("====================================");
+
     const user = await getUser();
     const mobUserID = user?.MobUserID ?? user?.mobUserID ?? user?.id;
 
@@ -53,33 +59,45 @@ export default function CheckoutSummaryScreen() {
       0,
     );
 
+    // IMPORTANT: Check if coordinates are present
+    console.log("[CHECKOUT SUMMARY] Coordinates check:", {
+      latitude: data.latitude,
+      longitude: data.longitude,
+      hasCoordinates: data.latitude !== null && data.longitude !== null,
+    });
+
+    // Prepare the payload with coordinates
+    const orderPayload = {
+      mobUserID,
+      paymentMethod: data.paymentMethod,
+      paymentReceiptDoc: data.screenshotBase64 ?? "-",
+      orderTotal: subtotal + deliveryFee,
+      orderDiscount,
+      netTotal: total,
+      deliveryType: data.deliveryType,
+      deliveryAddress: data.address,
+      deliveryInstruction: data.note?.trim() || "-",
+      deliveryContact: data.contactNumber,
+      // ADD THESE LINES - Send coordinates to backend
+      latitude: data.latitude !== null ? String(data.latitude) : "0",
+      longitude: data.longitude !== null ? String(data.longitude) : "0",
+      orderDetail: buildOrderDetail(items),
+    };
+
+    console.log("[CHECKOUT SUMMARY] Order payload being sent:", {
+      ...orderPayload,
+      paymentReceiptDoc: orderPayload.paymentReceiptDoc ? "PRESENT" : "NONE",
+      orderDetail: `${orderPayload.orderDetail.length} items`,
+      latitude: orderPayload.latitude,
+      longitude: orderPayload.longitude,
+    });
+
     try {
       setPlacing(true);
 
-      await insertOrder({
-        mobUserID,
+      const response = await insertOrder(orderPayload);
 
-        // Payment method stays separate.
-        paymentMethod: data.paymentMethod,
-
-        // Only send the payment screenshot here.
-        paymentReceiptDoc: data.screenshotBase64 ?? "-",
-
-        orderTotal: subtotal + deliveryFee,
-        orderDiscount,
-        netTotal: total,
-
-        deliveryType: data.deliveryType,
-        deliveryAddress: data.address,
-
-        // IMPORTANT:
-        // Only the user's note is sent as the delivery instruction.
-        // Bank details are NOT added here.
-        deliveryInstruction: data.note?.trim() || "-",
-
-        deliveryContact: data.contactNumber,
-        orderDetail: buildOrderDetail(items),
-      });
+      console.log("[CHECKOUT SUMMARY] Order placed successfully:", response);
 
       await clearCart();
       resetCheckout();
@@ -88,6 +106,7 @@ export default function CheckoutSummaryScreen() {
       showToast("Order placed successfully!", "success");
       router.replace("/order-success");
     } catch (e: any) {
+      console.error("[CHECKOUT SUMMARY] Failed to place order:", e);
       setShowConfirm(false);
 
       showToast(
@@ -167,6 +186,15 @@ export default function CheckoutSummaryScreen() {
             label="Address"
             value={data.address}
           />
+
+          {/* Show coordinates if available */}
+          {data.latitude !== null && data.longitude !== null && (
+            <SummaryRow
+              icon="navigate-outline"
+              label="Coordinates"
+              value={`${data.latitude.toFixed(6)}, ${data.longitude.toFixed(6)}`}
+            />
+          )}
 
           <SummaryRow
             icon="call-outline"

@@ -1,4 +1,3 @@
-import Button from "@/components/Button";
 import { colors, radius, spacing, typography } from "@/constants/theme";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
@@ -21,14 +20,9 @@ export default function OrderSuccessScreen() {
       <Text style={styles.subtitle}>
         Your order has been placed.{"\n"}We will deliver it to you soon.
       </Text>
-      <Text style={styles.orderId}>Order ID: {orderId}</Text>
 
       <View style={styles.footer}>
-        <Button
-          title="Track Order"
-          variant="secondary"
-          onPress={() => router.replace("/(tabs)")}
-        />
+       
         <Text style={styles.backHome} onPress={() => router.replace("/(tabs)")}>
           Back to Home
         </Text>

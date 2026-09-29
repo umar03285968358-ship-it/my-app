@@ -104,13 +104,17 @@ function dateOnly(iso: string) {
 // DATE FILTERS
 // ================================================================
 
-type FilterKey = "today" | "week" | "custom";
+type FilterKey = "all" | "today" | "week" | "custom";
 
 const FILTERS: {
   key: FilterKey;
   label: string;
   icon?: keyof typeof Ionicons.glyphMap;
 }[] = [
+  {
+    key: "all",
+    label: "All",
+  },
   {
     key: "today",
     label: "Today",
@@ -132,6 +136,12 @@ function getPresetRange(filter: FilterKey): {
   const today = new Date();
 
   switch (filter) {
+    case "all":
+      return {
+        from: MASTER_FROM,
+        to: toDateString(today),
+      };
+
     case "today":
       return {
         from: toDateString(today),
@@ -281,8 +291,7 @@ export default function RiderOrdersScreen() {
   // DATE FILTER
   // --------------------------------------------------------------
 
-  const [activeFilter, setActiveFilter] = useState<FilterKey>("week");
-
+const [activeFilter, setActiveFilter] = useState<FilterKey>("today");
   // --------------------------------------------------------------
   // STATUS FILTER
   // --------------------------------------------------------------
@@ -294,10 +303,11 @@ export default function RiderOrdersScreen() {
   // ADVANCED FILTERS
   // --------------------------------------------------------------
 
-  const [advancedFilters, setAdvancedFilters] = useState<AdvancedFilterValues>({
-    paymentTypes: [],
-    deliveryTypes: [],
-  });
+  const [advancedFilters, setAdvancedFilters] =
+    useState<AdvancedFilterValues>({
+      paymentTypes: [],
+      deliveryTypes: [],
+    });
 
   const [advancedFiltersVisible, setAdvancedFiltersVisible] = useState(false);
 
@@ -608,6 +618,7 @@ export default function RiderOrdersScreen() {
    *
    * Therefore:
    *
+   * All        -> all orders till current date
    * Today      -> today's filtered count
    * This Week  -> this week's filtered count
    * Custom     -> custom range filtered count

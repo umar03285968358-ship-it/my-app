@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Image,
+  Linking,
   Modal,
   Pressable,
   ScrollView,
@@ -245,6 +246,39 @@ export default function CustomerOrderDetailModal({
     }
   };
 
+  // ===============================================================
+  // CALL RIDER
+  // ===============================================================
+
+  const callRider = async () => {
+    try {
+      const raw = String(order?.riderMobileNo ?? "").trim();
+
+      if (!raw) {
+        return;
+      }
+
+      /*
+       * Strip everything except digits and a leading +
+       * so formatting like spaces/dashes doesn't break the tel: URL.
+       */
+      const phoneNumber = raw.replace(/[^\d+]/g, "");
+
+      if (!phoneNumber) {
+        return;
+      }
+
+      const phoneUrl = `tel:${phoneNumber}`;
+
+      await Linking.openURL(phoneUrl);
+    } catch (error) {
+      console.log(
+        "[ORDER DETAIL MODAL] Failed to open phone dialer for rider:",
+        error,
+      );
+    }
+  };
+
   if (!order) {
     return null;
   }
@@ -470,10 +504,34 @@ export default function CustomerOrderDetailModal({
                       <Text style={styles.summaryLabel}>Rider</Text>
                     </View>
 
-                    <Text style={styles.summaryValue}>
-                      {order.riderName}
-                      {order.riderMobileNo ? ` · ${order.riderMobileNo}` : ""}
-                    </Text>
+                    <View style={styles.riderValueRow}>
+                      <Text style={styles.summaryValue}>
+                        {order.riderName}
+                        {order.riderMobileNo
+                          ? ` · ${order.riderMobileNo}`
+                          : ""}
+                      </Text>
+
+                      {order.riderMobileNo ? (
+                        <TouchableOpacity
+                          style={styles.callRiderButton}
+                          activeOpacity={0.75}
+                          onPress={callRider}
+                          hitSlop={{
+                            top: 6,
+                            bottom: 6,
+                            left: 6,
+                            right: 6,
+                          }}
+                        >
+                          <Ionicons
+                            name="call"
+                            size={13}
+                            color={colors.white}
+                          />
+                        </TouchableOpacity>
+                      ) : null}
+                    </View>
                   </View>
                 )}
 
@@ -983,6 +1041,27 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     textAlign: "right",
     lineHeight: 17,
+  },
+
+  // ===============================================================
+  // RIDER CALL BUTTON
+  // ===============================================================
+
+  riderValueRow: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
+  },
+
+  callRiderButton: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: ORANGE,
+    justifyContent: "center",
+    alignItems: "center",
+    marginLeft: 8,
   },
 
   // ===============================================================

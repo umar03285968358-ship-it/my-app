@@ -14,7 +14,7 @@ export default function GoogleButton({
   onPress,
   loading = false,
   disabled = false,
-  title = "Continue with Google",
+  title = "Google",
 }: GoogleButtonProps) {
   const isDisabled = disabled || loading;
 

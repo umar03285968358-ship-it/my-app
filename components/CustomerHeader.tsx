@@ -64,6 +64,7 @@ export default function CustomerHeader() {
       mounted = false;
     };
   }, []);
+
   const isHome =
     pathname === "/" ||
     pathname === "/(tabs)" ||
@@ -82,12 +83,51 @@ export default function CustomerHeader() {
 
   const isProfile = pathname === "/profile" || pathname === "/(tabs)/profile";
 
+  const isNotifications =
+    pathname === "/notifications" ||
+    pathname === "/(tabs)/notifications";
+
+  const isPrivacyPolicy =
+    pathname === "/privacy-policy" || pathname === "/(tabs)/privacy-policy";
+
+  const isTermsConditions =
+    pathname === "/terms-conditions" || pathname === "/(tabs)/terms-conditions";
+
   const isCategoryDetail = pathname.startsWith("/category/");
   const isSubcategoryDetail = pathname.startsWith("/subcategory/");
   const isProductDetail = pathname.startsWith("/product/");
 
+  /* ===================================================
+     CHECKOUT FLOW + ORDER SUCCESS
+
+     app/checkout/address.tsx   -> /checkout/address
+     app/checkout/payment.tsx   -> /checkout/payment
+     app/checkout/review.tsx    -> /checkout/review
+     app/checkout/summary.tsx   -> /checkout/summary
+     app/order-success.tsx      -> /order-success
+  =================================================== */
+
+  const isCheckoutAddress = pathname === "/checkout/address";
+  const isCheckoutPayment = pathname === "/checkout/payment";
+  const isCheckoutReview = pathname === "/checkout/review";
+  const isCheckoutSummary = pathname === "/checkout/summary";
+  const isOrderSuccess = pathname === "/order-success";
+
+  const isCheckoutFlow =
+    isCheckoutAddress ||
+    isCheckoutPayment ||
+    isCheckoutReview ||
+    isCheckoutSummary ||
+    isOrderSuccess;
+
   const isDetailPage =
-    isCategoryDetail || isSubcategoryDetail || isProductDetail;
+    isCategoryDetail ||
+    isSubcategoryDetail ||
+    isProductDetail ||
+    isCheckoutFlow ||
+    isPrivacyPolicy ||
+    isTermsConditions;
+
 
   const getRouteId = (routeName: string): number | null => {
     const parts = pathname.split("/");
@@ -135,6 +175,9 @@ export default function CustomerHeader() {
     if (isOrders) return "Orders";
     if (isWishlist) return "Wishlist";
     if (isProfile) return "Profile";
+    if (isNotifications) return "Notifications";
+    if (isPrivacyPolicy) return "Privacy Policy";
+    if (isTermsConditions) return "Terms & Conditions";
 
     if (isCategoryDetail) {
       if (currentCategory?.name) return currentCategory.name;
@@ -148,11 +191,44 @@ export default function CustomerHeader() {
 
     if (isProductDetail) return "Product Details";
 
+    if (isCheckoutAddress) return "Delivery Address";
+    if (isCheckoutPayment) return "Payment";
+    if (isCheckoutReview) return "Review Order";
+    if (isCheckoutSummary) return "Order Summary";
+    if (isOrderSuccess) return "Order Confirmed";
+
     return "MY APP";
   };
 
+  /*
+   * ---------------------------------------------------------
+   * CART NAVIGATION
+   *
+   * Remember the screen the customer is currently on before
+   * opening Cart.
+   *
+   * Examples:
+   *
+   * Products -> Cart -> Back -> Products
+   * Categories -> Cart -> Back -> Categories
+   * Home -> Cart -> Back -> Home
+   * Product Detail -> Cart -> Back -> Product Detail
+   *
+   * If Cart is opened directly from the Cart tab, no returnTo
+   * parameter is added and normal navigation behavior remains.
+   * ---------------------------------------------------------
+   */
   const handleCartPress = () => {
-    router.push("/(tabs)/cart");
+    if (isCart) {
+      return;
+    }
+
+    router.push({
+      pathname: "/(tabs)/cart",
+      params: {
+        returnTo: pathname,
+      },
+    });
   };
 
   const handleBackPress = () => {
@@ -181,24 +257,13 @@ export default function CustomerHeader() {
 
   const [renderSearchIcon, setRenderSearchIcon] =
     useState(shouldShowSearchIcon);
+
   const searchIconAnim = useRef(
     new Animated.Value(shouldShowSearchIcon ? 1 : 0),
   ).current;
 
-  // Holds whichever Animated.timing is currently in flight (in or
-  // out). Stopping it before starting the next one guarantees a
-  // previous animation's .start() callback can never fire after a
-  // newer render has already decided the icon's visibility —
-  // that stale-callback race was the actual bug (see investigation
-  // log Section 3.2/3.3): two separate effects shared one Animated
-  // .Value with no way to cancel an in-flight timing, so a
-  // 200ms animate-out queued right before a quick re-show would
-  // still land afterwards and silently force the icon back to
-  // hidden even though the current render state said it should be
-  // visible.
   const currentAnimationRef = useRef<Animated.CompositeAnimation | null>(null);
 
-  // DEBUG: snapshot every render, after both pieces of state exist
   console.log("[HEADER RENDER]", {
     pathname,
     hasSearchScreen,
@@ -214,11 +279,6 @@ export default function CustomerHeader() {
       renderSearchIcon,
     });
 
-    // Stop whatever animation was previously in flight. This is
-    // what closes the race: if an animate-out was mid-flight with
-    // a pending setRenderSearchIcon(false) callback, .stop() means
-    // that callback will simply never be invoked, instead of firing
-    // late and clobbering the correct state.
     currentAnimationRef.current?.stop();
     currentAnimationRef.current = null;
 
@@ -226,6 +286,7 @@ export default function CustomerHeader() {
       setRenderSearchIcon(true);
 
       console.log("[ICON EFFECT] -> animating in, toValue 1");
+
       const anim = Animated.timing(searchIconAnim, {
         toValue: 1,
         duration: 260,
@@ -234,6 +295,7 @@ export default function CustomerHeader() {
       });
 
       currentAnimationRef.current = anim;
+
       anim.start(({ finished }) => {
         if (finished) {
           console.log("[ICON EFFECT] -> animate-in complete");
@@ -241,6 +303,7 @@ export default function CustomerHeader() {
       });
     } else if (renderSearchIcon) {
       console.log("[ICON EFFECT] -> animating out, toValue 0");
+
       const anim = Animated.timing(searchIconAnim, {
         toValue: 0,
         duration: 200,
@@ -249,14 +312,13 @@ export default function CustomerHeader() {
       });
 
       currentAnimationRef.current = anim;
+
       anim.start(({ finished }) => {
-        // `finished` is false when .stop() cut this animation off
-        // early (i.e. a newer render superseded it) — only commit
-        // the hide when this animation actually ran to completion.
         if (finished) {
           console.log(
             "[ICON EFFECT] -> animate-out complete, setRenderSearchIcon(false)",
           );
+
           setRenderSearchIcon(false);
         } else {
           console.log("[ICON EFFECT] -> animate-out stopped early, ignoring");
@@ -268,8 +330,6 @@ export default function CustomerHeader() {
       );
     }
 
-    // Belt-and-suspenders: also stop on unmount so nothing tries to
-    // touch state after the component is gone.
     return () => {
       currentAnimationRef.current?.stop();
     };
@@ -350,7 +410,7 @@ export default function CustomerHeader() {
                 style={styles.cartButton}
                 activeOpacity={0.75}
                 onPress={handleCartPress}
-                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                hitSlop={{ top: 6, bottom: 8, left: 6, right: 6 }}
               >
                 <Ionicons name="cart-outline" size={19} color={colors.white} />
 
@@ -455,12 +515,6 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
 
-  /*
-   * When the search icon also occupies the right side of a
-   * detail-page header (Subcategory/Category detail pages
-   * with search registered), the title needs extra right
-   * clearance so it doesn't collide with/overlap the icon.
-   */
   detailTitleContainerWithSearch: {
     right: 96,
   },

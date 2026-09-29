@@ -8,6 +8,10 @@ import {
   signupGoogleUser,
 } from "@/services/api";
 import { saveSession } from "@/services/authStorage";
+import {
+  updateOneSignalUser,
+} from "@/services/oneSignal";
+import { resolvePostLoginRoute } from "@/utils/authRouting";
 import { router } from "expo-router";
 import React, { useState } from "react";
 import {
@@ -21,25 +25,6 @@ import {
 } from "react-native";
 
 const { width } = Dimensions.get("window");
-
-/*
- * ============================================================
- * ROUTE RESOLVER
- * ============================================================
- */
-function resolvePostLoginRoute(
-  user: any,
-): "/(rider)/dashboard" | "/(tabs)" {
-  const userType = String(user?.userType ?? "")
-    .trim()
-    .toLowerCase();
-
-  if (userType === "rider") {
-    return "/(rider)/dashboard";
-  }
-
-  return "/(tabs)";
-}
 
 export default function LoginScreen() {
   const [email, setEmail] = useState("");
@@ -57,33 +42,10 @@ export default function LoginScreen() {
     isGoogle: boolean,
   ) => {
     try {
-      console.log("");
-      console.log("====================================");
-      console.log(
-        `[LOGIN SCREEN] STARTING ${
-          isGoogle ? "GOOGLE" : "NORMAL"
-        } LOGIN`,
-      );
-      console.log("====================================");
-      console.log("[LOGIN SCREEN] Email:", loginEmail);
-      console.log(
-        "[LOGIN SCREEN] Password:",
-        isGoogle ? '"!@#" (Google)' : "PROVIDED",
-      );
-      console.log(
-        "[LOGIN SCREEN] RegType:",
-        isGoogle ? "Google" : "Normal",
-      );
-
       const response = await loginUser(
         loginEmail,
         loginPassword,
         isGoogle ? "Google" : "Normal",
-      );
-
-      console.log(
-        "[LOGIN SCREEN] Login API response:",
-        response,
       );
 
       const backendMessage = String(
@@ -94,11 +56,6 @@ export default function LoginScreen() {
 
       const normalizedMessage =
         backendMessage.toLowerCase();
-
-      console.log(
-        "[LOGIN SCREEN] Backend message:",
-        backendMessage,
-      );
 
       /*
        * ========================================================
@@ -118,11 +75,6 @@ export default function LoginScreen() {
         normalizedMessage.includes("not exist");
 
       if (hasExplicitFailure) {
-        console.warn(
-          "[LOGIN SCREEN] Login rejected by backend:",
-          backendMessage,
-        );
-
         throw new Error(
           backendMessage ||
             "Unable to login. Please check your credentials.",
@@ -140,25 +92,11 @@ export default function LoginScreen() {
         null;
 
       if (!loggedInUser) {
-        console.warn(
-          "[LOGIN SCREEN] Login response did not contain user data.",
-        );
-
         throw new Error(
           backendMessage ||
             "Unable to login. Please check your credentials.",
         );
       }
-
-      console.log(
-        "[LOGIN SCREEN] User returned by API:",
-        loggedInUser,
-      );
-
-      console.log(
-        "[LOGIN SCREEN] userType:",
-        loggedInUser?.userType,
-      );
 
       /*
        * ========================================================
@@ -172,11 +110,6 @@ export default function LoginScreen() {
         response?.accessToken ??
         "logged-in";
 
-      console.log(
-        "[LOGIN SCREEN] Backend token available:",
-        token ? "YES" : "NO",
-      );
-
       /*
        * ========================================================
        * SAVE SESSION
@@ -184,73 +117,47 @@ export default function LoginScreen() {
        */
       await saveSession(token, loggedInUser);
 
-      console.log(
-        "[LOGIN SCREEN] ✅ Login session saved.",
-      );
+      /*
+       * ========================================================
+       * ONESIGNAL
+       * ========================================================
+       *
+       * The backend login response contains:
+       *
+       * mobUserID
+       *
+       * This ID is used as the OneSignal External ID.
+       * The Subscription ID is obtained inside
+       * updateOneSignalUser() and is NOT sent to the backend
+       * from this screen.
+       */
+      const oneSignalUserId =
+        loggedInUser?.mobUserID;
+
+      if (
+        oneSignalUserId !== undefined &&
+        oneSignalUserId !== null &&
+        String(oneSignalUserId).trim() !== ""
+      ) {
+        await updateOneSignalUser(oneSignalUserId);
+      }
 
       /*
        * ========================================================
        * ROUTING
        * ========================================================
+       * After successful login, redirect immediately.
+       * No success modal / extra click required.
        */
       const destination =
         resolvePostLoginRoute(loggedInUser);
 
-      console.log(
-        "[LOGIN SCREEN] User type:",
-        loggedInUser?.userType,
-      );
-
-      console.log(
-        "[LOGIN SCREEN] Redirecting to:",
-        destination,
-      );
-
-      console.log(
-        "====================================",
-      );
-      console.log(
-        `[LOGIN SCREEN] ${
-          isGoogle ? "GOOGLE" : "NORMAL"
-        } LOGIN SUCCESS`,
-      );
-      console.log(
-        "====================================",
-      );
-      console.log("");
-
-      // For Google login, redirect without alert
-      if (isGoogle) {
-        router.replace(destination);
-      } else {
-        // For normal login, show alert then redirect
-        Alert.alert(
-          "Login Successful",
-          "Welcome back!",
-          [
-            {
-              text: "OK",
-              onPress: () =>
-                router.replace(destination),
-            },
-          ],
-        );
-      }
+      router.replace(destination);
     } catch (error: any) {
-      console.log("");
-      console.log("====================================");
-      console.log(
-        `[LOGIN SCREEN] ${
-          isGoogle ? "GOOGLE" : "NORMAL"
-        } LOGIN FAILED`,
-      );
-      console.log("====================================");
       console.error(
         "[LOGIN SCREEN] Login error:",
         error,
       );
-      console.log("====================================");
-      console.log("");
 
       Alert.alert(
         "Login Failed",
@@ -271,32 +178,6 @@ export default function LoginScreen() {
   } = useGoogleAuth({
     onSuccess: async (user) => {
       try {
-        console.log("");
-        console.log(
-          "####################################################",
-        );
-        console.log(
-          "############ GOOGLE AUTH SUCCESS ###################",
-        );
-        console.log(
-          "####################################################",
-        );
-
-        console.log(
-          "[LOGIN SCREEN] Google user received:",
-          user,
-        );
-
-        console.log(
-          "[LOGIN SCREEN] Google email:",
-          user?.email,
-        );
-
-        console.log(
-          "[LOGIN SCREEN] Google ID:",
-          user?.id,
-        );
-
         /*
          * ========================================================
          * STEP 1: TRY GOOGLE SIGNUP FIRST
@@ -314,10 +195,6 @@ export default function LoginScreen() {
           user.name.trim().split(" ").slice(1).join(" ") ||
           "";
 
-        console.log(
-          "[LOGIN SCREEN] Attempting Google signup...",
-        );
-
         let signupResponse;
         try {
           signupResponse = await signupGoogleUser({
@@ -326,16 +203,7 @@ export default function LoginScreen() {
             email: user.email,
             googleId: user.id,
           });
-
-          console.log(
-            "[LOGIN SCREEN] Google signup response:",
-            signupResponse,
-          );
         } catch (signupError: any) {
-          console.log(
-            "[LOGIN SCREEN] Signup attempt failed:",
-            signupError?.message,
-          );
           // Continue to login even if signup fails
         }
 
@@ -382,28 +250,12 @@ export default function LoginScreen() {
             "email exists",
           );
 
-        console.log(
-          "[LOGIN SCREEN] Signup success:",
-          isSignupSuccess,
-        );
-
-        console.log(
-          "[LOGIN SCREEN] Email exists:",
-          isEmailExists,
-        );
-
         /*
          * ========================================================
          * STEP 3: LOGIN WITH GOOGLE (REGARDLESS OF SIGNUP RESULT)
          * ========================================================
-         * Whether signup succeeded or email already exists,
-         * we proceed to login with password "!@#" and RegType "Google"
          */
         if (isSignupSuccess || isEmailExists) {
-          console.log(
-            "[LOGIN SCREEN] Proceeding to Google login...",
-          );
-
           await handleLoginSuccess(
             user.email,
             "!@#",
@@ -417,26 +269,10 @@ export default function LoginScreen() {
           );
         }
       } catch (error: any) {
-        console.log("");
-        console.log(
-          "####################################################",
-        );
-        console.log(
-          "######## GOOGLE LOGIN FAILED #######################",
-        );
-        console.log(
-          "####################################################",
-        );
-
         console.error(
           "[LOGIN SCREEN] Google login failed:",
           error,
         );
-
-        console.log(
-          "####################################################",
-        );
-        console.log("");
 
         Alert.alert(
           "Google Login Failed",
@@ -447,26 +283,10 @@ export default function LoginScreen() {
     },
 
     onError: (message) => {
-      console.log("");
-      console.log(
-        "####################################################",
-      );
-      console.log(
-        "############ GOOGLE AUTH FAILED ####################",
-      );
-      console.log(
-        "####################################################",
-      );
-
       console.error(
         "[LOGIN SCREEN] Google error:",
         message,
       );
-
-      console.log(
-        "####################################################",
-      );
-      console.log("");
 
       Alert.alert(
         "Google Login Failed",
@@ -530,9 +350,7 @@ export default function LoginScreen() {
       <Text style={styles.subtitle}>Sign in to continue</Text>
 
       <Image
-        source={{
-          uri: "https://i.pinimg.com/1200x/7c/e5/c0/7ce5c0cf8df035e6126d57b4e271dbac.jpg",
-        }}
+      source={require('../../assets/images/logo.png')}
         style={styles.image}
       />
 
@@ -619,6 +437,7 @@ const styles = StyleSheet.create({
     alignSelf: "flex-start",
     width: "100%",
     textAlign: "center",
+    marginTop:2,
   },
 
   subtitle: {
@@ -630,12 +449,12 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
 
-  image: {
-    width: width * 0.5,
-    height: width * 0.5,
-    borderRadius: 999,
-    marginBottom: spacing.lg,
-  },
+ image: {
+  width: width * 0.75,
+  height: width * 0.5,
+  marginBottom: spacing.lg,
+  resizeMode: 'contain',
+},
 
   forgot: {
     ...typography.caption,

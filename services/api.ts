@@ -1,9 +1,12 @@
-const BASE_URL = "http://159.69.174.21:2038";
+const BASE_URL = "https://apilasanitraders.logixerpsoft.com";
 
 async function apiRequest<T = any>(
   path: string,
   body: Record<string, any>,
   label: string,
+  options?: {
+    acceptDataSavedSuccessfully?: boolean;
+  },
 ): Promise<T> {
   const url = `${BASE_URL}${path}`;
 
@@ -36,20 +39,48 @@ async function apiRequest<T = any>(
 
     console.log(`[${label}] Parsed Response:`, data);
 
-    if (!response.ok) {
+    const message =
+      data?.msg ||
+      data?.message ||
+      data?.Message ||
+      data?.error ||
+      data?.Error ||
+      "";
+
+    /*
+     * Some backend endpoints return HTTP 400 even though the
+     * operation was actually completed successfully.
+     *
+     * Example:
+     * Status: 400
+     * Response: {"msg":"Data Saved Successfully"}
+     *
+     * Only allow this special case when the caller explicitly
+     * enables acceptDataSavedSuccessfully.
+     */
+    if (
+      !response.ok &&
+      !(
+        options?.acceptDataSavedSuccessfully &&
+        String(message).trim().toLowerCase() === "data saved successfully"
+      )
+    ) {
       throw new Error(
-        data?.msg ||
-          data?.message ||
-          data?.Message ||
-          data?.error ||
-          data?.Error ||
-          `${label} failed. Server returned ${response.status}`,
+        message || `${label} failed. Server returned ${response.status}`,
       );
     }
 
+    /*
+     * If the server returned:
+     *
+     * 400 + "Data Saved Successfully"
+     *
+     * treat it as a successful API response.
+     */
     return data;
   } catch (error: any) {
     console.log(`[${label}] Error:`, error);
+
     throw new Error(
       error?.message || `Unable to connect to the ${label} server.`,
     );
@@ -101,12 +132,12 @@ async function apiGetRequest<T = any>(path: string, label: string): Promise<T> {
     return data;
   } catch (error: any) {
     console.log(`[${label}] Error:`, error);
+
     throw new Error(
       error?.message || `Unable to connect to the ${label} server.`,
     );
   }
 }
-
 export async function loginUser(
   email: string,
   password: string,
@@ -265,7 +296,7 @@ export interface MobCategory {
   id: number;
   name: string;
   type: CatType;
-  parentId: number | null; // null for Cat rows, the parent categoryID for SubCat rows
+  parentId: number | null;
   image: string | null;
 }
 
@@ -287,6 +318,7 @@ export async function getMobCategories() {
   );
   return Array.isArray(raw) ? raw.map(normalizeCategory) : [];
 }
+
 // ---- Products ----
 
 export interface MobProduct {
@@ -309,7 +341,9 @@ export interface MobProduct {
   favStatus: boolean;
   imagesPath: string | null;
   productDescription: string;
-  // stockQuantity?: number;  // <-- ADD THIS once you confirm the real field name from your API
+  ratingStar: number;
+  totalRatings: number;
+  // stockQuantity?: number;
 }
 
 export async function getMobProducts(
@@ -350,6 +384,7 @@ export async function getMobWishlistProducts(
   );
   return Array.isArray(data) ? data : [];
 }
+
 // ---- Orders ----
 
 export interface OrderDetailItem {
@@ -382,25 +417,33 @@ export interface InsertOrderPayload {
 }
 
 export async function insertOrder(payload: InsertOrderPayload) {
-  return apiRequest(
-    "/mob/InsertOrder",
-    {
-      MobUserID: payload.mobUserID,
-      PaymentMethod: payload.paymentMethod,
-      PaymentReceiptDoc: payload.paymentReceiptDoc ?? "-",
-      OrderTotal: payload.orderTotal,
-      OrderDiscount: payload.orderDiscount,
-      NetTotal: payload.netTotal,
-      DeliveryType: payload.deliveryType,
-      DeliveryAddress: payload.deliveryAddress,
-      DeliveryInstruction: payload.deliveryInstruction ?? "-",
-      DeliveryContact: payload.deliveryContact,
-      Latitude: payload.latitude ?? "0",
-      Longitude: payload.longitude ?? "0",
-      OrderDetail: JSON.stringify(payload.orderDetail),
-    },
-    "INSERT_ORDER",
-  );
+  console.log("[API] insertOrder called with payload:", {
+    ...payload,
+    paymentReceiptDoc: payload.paymentReceiptDoc ? "PRESENT" : "NONE",
+    orderDetail: `${payload.orderDetail.length} items`,
+    latitude: payload.latitude,
+    longitude: payload.longitude,
+  });
+
+  const requestBody = {
+    MobUserID: payload.mobUserID,
+    PaymentMethod: payload.paymentMethod,
+    PaymentReceiptDoc: payload.paymentReceiptDoc ?? "-",
+    OrderTotal: payload.orderTotal,
+    OrderDiscount: payload.orderDiscount,
+    NetTotal: payload.netTotal,
+    DeliveryType: payload.deliveryType,
+    DeliveryAddress: payload.deliveryAddress,
+    DeliveryInstruction: payload.deliveryInstruction ?? "-",
+    DeliveryContact: payload.deliveryContact,
+    Latitude: payload.latitude ?? "0",
+    Longitude: payload.longitude ?? "0",
+    OrderDetail: JSON.stringify(payload.orderDetail),
+  };
+
+  console.log("[API] Request body being sent:", requestBody);
+
+  return apiRequest("/mob/InsertOrder", requestBody, "INSERT_ORDER");
 }
 
 // ---- Bank Details (for IBFT payment) ----
@@ -420,9 +463,6 @@ export async function getBankDetail(): Promise<MobBankDetail | null> {
   const raw = Array.isArray(data) ? data[0] : data;
   if (!raw) return null;
 
-  // NOTE: field names guessed from the API's existing camelCase convention
-  // (see MobCategoryRaw/MobProduct). Console-log the raw response once and
-  // adjust the keys below if they don't match.
   return {
     accountTitle: raw.accountTitle ?? raw.AccountTitle ?? "",
     accountNo: raw.accountNo ?? raw.accountNo ?? "",
@@ -430,35 +470,37 @@ export async function getBankDetail(): Promise<MobBankDetail | null> {
     bankName: raw.bankName ?? raw.BankName ?? "",
   };
 }
+
 // ---- Order History ----
 
-// This is the ACTUAL raw shape returned by /mob/GetMobOrders, confirmed
-// from a live response. Note there is NO `orderID` — the row identifier is
-// `orderNo`. `orderDetail` also comes back `null` on this endpoint (unlike
-// InsertOrder, which sends OrderDetail as a stringified array) — line-item
-// breakdown isn't available from GetMobOrders, only order-level summary data.
+// This is the ACTUAL raw shape returned by /mob/GetMobOrders.
 export interface MobOrder {
-  orderNo: number; // use this as the unique key — there is no orderID
+  orderNo: number;
   orderDate: string;
   mobUserID: number;
   paymentMethod: string;
-  paymentReceiptDoc: string | null; // full image URL when present (IBFT), null for COD
+  paymentReceiptDoc: string | null;
   orderTotal: number;
   orderDiscount: number;
   netTotal: number;
   deliveryType: string;
   deliveryAddress: string;
-  deliveryInstruction: string; // free text — for IBFT orders this also embeds "Bank: ... | Account Title: ... | Account No: ... | IBAN: ..."
+  deliveryInstruction: string;
   deliveryContact: string;
-  orderStatus: string; // confirmed values so far: "Pending" | "Processing" — more likely exist (e.g. "Delivered"/"Cancelled"), treat unknowns gracefully
-  deliveredOn: string | null; // "0001-01-01T00:00:00" sentinel means "not delivered yet" — normalized to null
+  orderStatus: string;
+  deliveredOn: string | null;
   remarks: string;
   totalItems: number;
   customerName: string;
+  riderID: number | null;
   riderName: string | null;
   riderMobileNo: string | null;
   mobileNo: string;
   pinCode: string | null;
+
+  // Rating fields returned by GetMobOrders
+  ratingStar: number;
+  ratingRemarks: string | null;
 }
 
 export type OrderReqFilter = "All" | "Recent" | "Past";
@@ -466,7 +508,7 @@ export type OrderReqFilter = "All" | "Recent" | "Past";
 function normalizeMobOrder(raw: any): MobOrder {
   const deliveredOnRaw = raw.deliveredOn ?? raw.DeliveredOn ?? null;
   const deliveredOn =
-    deliveredOnRaw && !deliveredOnRaw.startsWith("0001-01-01")
+    deliveredOnRaw && !String(deliveredOnRaw).startsWith("0001-01-01")
       ? deliveredOnRaw
       : null;
 
@@ -489,10 +531,15 @@ function normalizeMobOrder(raw: any): MobOrder {
     remarks: raw.remarks ?? raw.Remarks ?? "-",
     totalItems: raw.totalItems ?? raw.TotalItems ?? 0,
     customerName: raw.customerName ?? raw.CustomerName ?? "",
+    riderID: raw.riderID ?? raw.RiderID ?? null,
     riderName: raw.riderName ?? raw.RiderName ?? null,
     riderMobileNo: raw.riderMobileNo ?? raw.RiderMobileNo ?? null,
     mobileNo: raw.mobileNo ?? raw.MobileNo ?? "",
     pinCode: raw.pinCode ?? raw.PinCode ?? null,
+
+    // IMPORTANT: preserve rating data from GetMobOrders
+    ratingStar: raw.ratingStar ?? raw.RatingStar ?? 0,
+    ratingRemarks: raw.ratingRemarks ?? raw.RatingRemarks ?? null,
   };
 }
 
@@ -505,10 +552,6 @@ export async function getMobOrders(
   const params = new URLSearchParams();
   params.set("MobUserID", String(mobUserID));
 
-  // Confirmed from a live call: reqFilter="All" sends the literal string
-  // "null" for both dates. When real dates are passed in (for a genuine
-  // Recent/Past date-range split, see the Orders screen), they go through
-  // as-is instead of being forced to "null".
   params.set("FromDate", fromDate ?? "null");
   params.set("ToDate", toDate ?? "null");
   params.set("reqFilter", reqFilter);
@@ -550,7 +593,7 @@ function normalizeRiderTotals(raw: any): RiderTotals {
     codQty: raw.codQty ?? raw.CodQty ?? 0,
     codAmount: raw.codAmount ?? raw.CodAmount ?? 0,
     ibftQty: raw.ibftQty ?? raw.IbftQty ?? 0,
-    ibftAmount: raw.ibftAmount ?? raw.IbftAmount ?? 0,
+    ibftAmount: raw.IbftAmount ?? raw.IbftAmount ?? 0,
     cancelledQty: raw.cancelledQty ?? raw.CancelledQty ?? 0,
     cancelledAmount: raw.cancelledAmount ?? raw.CancelledAmount ?? 0,
   };
@@ -595,7 +638,7 @@ export interface RiderOrder {
   latitude: string;
   longitude: string;
   orderStatus: string;
-  deliveredOn: string | null; // "0001-01-01..." sentinel normalized to null, same as GetMobOrders
+  deliveredOn: string | null;
   remarks: string;
   totalItems: number;
   customerName: string;
@@ -719,5 +762,349 @@ export async function changeOrderStatus(payload: ChangeOrderStatusPayload) {
       UserID: payload.userID,
     },
     "CHANGE_ORDER_STATUS",
+  );
+}
+
+// ---- Homepage Images ----
+
+export interface HomePageImage {
+  hpID: number;
+  title: string;
+  type: string;
+  imagesPath: string;
+  hpImage: string | null;
+  categoryID: number;
+  subCategoryID: number;
+  updatedAt?: string;
+}
+
+export async function getHomePageImages(): Promise<HomePageImage[]> {
+  const data = await apiGetRequest<HomePageImage[]>(
+    "/mob/GetHomePageImage",
+    "GET_HOMEPAGE_IMAGES",
+  );
+
+  return Array.isArray(data) ? data : [];
+}
+
+// ---- Mob Users (Admin — used to pull riders, customers, etc.) ----
+
+export interface MobUser {
+  id: number;
+  firstName: string;
+  lastName: string;
+  fullName: string;
+  email: string;
+  phone: string;
+  userType: string;
+  image: string | null;
+}
+
+function normalizeMobUser(raw: any): MobUser {
+  const firstName = raw.firstName ?? raw.FirstName ?? "";
+  const lastName = raw.lastName ?? raw.LastName ?? "";
+  return {
+    id: raw.mobUserID ?? raw.MobUserID,
+    firstName,
+    lastName,
+    fullName: `${firstName} ${lastName}`.trim(),
+    email: raw.email ?? raw.Email ?? "",
+    phone: raw.mobileNo ?? raw.MobileNo ?? "",
+    userType: raw.userType ?? raw.UserType ?? "",
+    image: raw.mobUserImage ?? raw.MobUserImage ?? null,
+  };
+}
+
+export async function getMobUsers(): Promise<MobUser[]> {
+  const data = await apiGetRequest<any[]>("/mob/GetMobUser", "GET_MOB_USERS");
+  return Array.isArray(data) ? data.map(normalizeMobUser) : [];
+}
+
+export async function getMobUsersByType(userType: string): Promise<MobUser[]> {
+  const users = await getMobUsers();
+  return users.filter(
+    (u) => u.userType.trim().toLowerCase() === userType.trim().toLowerCase(),
+  );
+}
+
+export async function getMobRiders(): Promise<MobUser[]> {
+  return getMobUsersByType("Rider");
+}
+
+// ---- Admin: All Orders (MobUserID=0 = every order, not scoped to one user) ----
+
+export async function getAllMobOrders(
+  fromDate: string | null,
+  toDate: string | null,
+  fromTime: string | null,
+  toTime: string | null,
+  reqFilter: OrderReqFilter = "All",
+): Promise<MobOrder[]> {
+  const params = new URLSearchParams();
+  params.set("MobUserID", "0");
+  params.set("FromDate", fromDate ?? "null");
+  params.set("ToDate", toDate ?? "null");
+  params.set("FromTime", fromTime ?? "null");
+  params.set("ToTime", toTime ?? "null");
+  params.set("reqFilter", reqFilter);
+
+  const data = await apiGetRequest<any[]>(
+    `/mob/GetMobOrders?${params.toString()}`,
+    "GET_ALL_ORDERS",
+  );
+
+  if (!Array.isArray(data)) return [];
+  return data.map(normalizeMobOrder);
+}
+
+// ---- Assign Rider to Order (separate endpoint from ChangeOrderStatus) ----
+
+export interface AssignRiderPayload {
+  orderNo: number;
+  riderID: number;
+  userID: number;
+}
+
+export async function assignRiderToOrder(payload: AssignRiderPayload) {
+  return apiRequest(
+    "/mob/OrderAssignToRider",
+    {
+      OrderNo: payload.orderNo,
+      RiderID: payload.riderID,
+      UserID: payload.userID,
+    },
+    "ASSIGN_RIDER",
+  );
+}
+
+// ---- Admin: Change Order Status (rider stays the same unless you pass a different riderID) ----
+
+export async function updateOrderStatusAdmin(payload: {
+  orderNo: number;
+  riderID: number;
+  orderStatus: string;
+  remarks?: string;
+  adminUserID: number;
+}) {
+  return changeOrderStatus({
+    orderNo: payload.orderNo,
+    riderID: payload.riderID,
+    orderStatus: payload.orderStatus,
+    remarks: payload.remarks,
+    userID: payload.adminUserID,
+  });
+}
+
+// ---- Rider Management (Admin: Add/Edit Rider) ----
+
+export interface InsertRiderPayload {
+  firstName: string;
+  lastName: string;
+  mobileNo: string;
+  email: string;
+  password: string;
+  userAddress?: string;
+}
+
+export async function insertRider(payload: InsertRiderPayload) {
+  return apiRequest(
+    "/mob/InsertMobUser",
+    {
+      FirstName: payload.firstName,
+      LastName: payload.lastName,
+      MobileNo: payload.mobileNo,
+      Email: payload.email,
+      Password: payload.password,
+      UserAddress: payload.userAddress || "-",
+      MobUserImage: "",
+      UserType: "Rider",
+      RegType: "Normal",
+      PinCode: "1234",
+    },
+    "INSERT_RIDER",
+  );
+}
+
+export interface UpdateRiderPayload {
+  mobUserID: number;
+  firstName: string;
+  lastName: string;
+  mobileNo: string;
+  email: string;
+  password?: string;
+  userAddress?: string;
+}
+
+export async function updateRider(payload: UpdateRiderPayload) {
+  return apiRequest(
+    "/mob/UpdateMobUser",
+    {
+      MobUserID: payload.mobUserID,
+      FirstName: payload.firstName,
+      LastName: payload.lastName,
+      MobileNo: payload.mobileNo,
+      Email: payload.email,
+      // Edit mode no longer collects a password, so payload.password
+      // will usually be undefined. Only include the Password key
+      // when a value was actually provided — omitting it (rather than
+      // sending an empty string) relies on the backend leaving the
+      // existing password untouched when the field isn't present.
+      ...(payload.password ? { Password: payload.password } : {}),
+      userAddress: payload.userAddress || "-",
+      MobUserImage: "",
+      UserType: "Rider",
+      RegType: "Normal",
+      PinCode: "1234",
+    },
+    "UPDATE_RIDER",
+  );
+}
+
+// ---- Notifications ----
+
+export interface MobNotification {
+  notificationID: string;
+  notificationTitle: string;
+  notificationSubTitle: string;
+  flag: boolean;
+  createdOn: string;
+  mobUserID: number;
+}
+
+export async function getMobNotifications(
+  mobUserID: number,
+): Promise<MobNotification[]> {
+  const data = await apiGetRequest<MobNotification[]>(
+    `/mob/GetMobNotification?MobUserID=${mobUserID}`,
+    "GET_NOTIFICATIONS",
+  );
+  return Array.isArray(data) ? data : [];
+}
+
+export async function updateNotificationStatus(notificationID: string) {
+  return apiRequest(
+    "/mob/UpdateNotificationStatus",
+    {
+      NotificationID: notificationID,
+    },
+    "UPDATE_NOTIFICATION_STATUS",
+  );
+}
+// ---- Ratings ----
+
+export interface RateOrderPayload {
+  orderNo: number;
+  ratingStar: number;
+  ratingRemarks?: string;
+}
+
+export async function rateOrder(payload: RateOrderPayload) {
+  return apiRequest(
+    "/mob/RateOrder",
+    {
+      OrderNo: payload.orderNo,
+      RatingStar: payload.ratingStar,
+      RatingRemarks: payload.ratingRemarks?.trim() || "",
+    },
+    "RATE_ORDER",
+    {
+      acceptDataSavedSuccessfully: true,
+    },
+  );
+}
+
+export interface RateProductPayload {
+  productID: number;
+  mobUserID: number;
+  ratingStar: number;
+  ratingRemarks?: string;
+}
+
+export async function rateProduct(payload: RateProductPayload) {
+  return apiRequest(
+    "/mob/RateProduct",
+    {
+      ProductID: payload.productID,
+      MobUserID: payload.mobUserID,
+      RatingStar: payload.ratingStar,
+      RatingRemarks: payload.ratingRemarks?.trim() || "",
+    },
+    "RATE_PRODUCT",
+    {
+      acceptDataSavedSuccessfully: true,
+    },
+  );
+}
+
+// ---- Admin Totals (Dashboard) ----
+
+export interface AdminTotals {
+  totalQty: number;
+  totalAmount: number;
+  pendingQty: number;
+  pendingAmount: number;
+  deliveredQty: number;
+  deliveredAmount: number;
+  codAmount: number;
+  codQty: number;
+  ibftAmount: number;
+  ibftQty: number;
+  cancelledAmount: number;
+  cancelledQty: number;
+}
+
+function normalizeAdminTotals(raw: any): AdminTotals {
+  return {
+    totalQty: raw.totalQty ?? raw.TotalQty ?? 0,
+    totalAmount: raw.totalAmount ?? raw.TotalAmount ?? 0,
+    pendingQty: raw.pendingQty ?? raw.PendingQty ?? 0,
+    pendingAmount: raw.pendingAmount ?? raw.PendingAmount ?? 0,
+    deliveredQty: raw.deliveredQty ?? raw.DeliveredQty ?? 0,
+    deliveredAmount: raw.deliveredAmount ?? raw.DeliveredAmount ?? 0,
+    codAmount: raw.codAmount ?? raw.CodAmount ?? 0,
+    codQty: raw.codQty ?? raw.CodQty ?? 0,
+    ibftAmount: raw.ibftAmount ?? raw.IbftAmount ?? 0,
+    ibftQty: raw.ibftQty ?? raw.IbftQty ?? 0,
+    cancelledAmount: raw.cancelledAmount ?? raw.CancelledAmount ?? 0,
+    cancelledQty: raw.cancelledQty ?? raw.CancelledQty ?? 0,
+  };
+}
+
+// NOTE: query params assumed to follow the same pattern as
+// getRiderTotals (FromDate/ToDate/reqFilter) — unconfirmed against a
+// live call. If this 404s or ignores the filter, check the exact
+// param names/casing the backend expects and adjust here.
+export async function getAdminTotals(
+  fromDate: string,
+  toDate: string,
+  reqFilter: OrderReqFilter = "All",
+): Promise<AdminTotals | null> {
+  const params = new URLSearchParams();
+  params.set("FromDate", fromDate);
+  params.set("ToDate", toDate);
+  params.set("reqFilter", reqFilter);
+
+  const data = await apiGetRequest<any[]>(
+    `/mob/GetAdminTotals?${params.toString()}`,
+    "GET_ADMIN_TOTALS",
+  );
+
+  const raw = Array.isArray(data) ? data[0] : data;
+  return raw ? normalizeAdminTotals(raw) : null;
+}
+
+// ---- Delete Account ----
+
+export async function deleteMobUser(
+  mobUserID: number,
+  pinCode: string = "1234",
+) {
+  return apiRequest(
+    "/mob/DelMobUser",
+    {
+      MobUserID: mobUserID,
+      PinCode: pinCode,
+    },
+    "DELETE_USER",
   );
 }
